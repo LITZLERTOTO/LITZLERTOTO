@@ -1720,11 +1720,17 @@ namespace UnrealBuildTool
 			get { return Inner.MinGameModuleSourceFilesForUnityBuild; }
 		}
 
+		/// HACK: Adding summary comments here to get pass warning CS1591 on mac, which will cause the
+		/// UBT build fail due to the variable has the "Error" word in the variable name
+		/// <summary>
+		/// </summary>
 		public bool bShadowVariableErrors
 		{
 			get { return Inner.bShadowVariableErrors; }
 		}
 
+		/// <summary>
+		/// </summary>
 		public bool bUndefinedIdentifierErrors
 		{
 			get { return Inner.bUndefinedIdentifierErrors; }
