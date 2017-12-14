@@ -4,22 +4,22 @@
 
 void AGoogleARCoreAnchorActor::Tick(float DeltaSeconds)
 {
-	if (bTrackingEnabled && ARAnchorObject != nullptr && ARAnchorObject->GetTrackingState() == EGoogleARCoreAnchorTrackingState::Tracking)
+	if (bTrackingEnabled && ARAnchorObject != nullptr && ARAnchorObject->GetTrackingState() == EGoogleARCoreTrackingState::Tracking)
 	{
-		SetActorTransform(ARAnchorObject->GetLatestPose().Pose);
+		SetActorTransform(ARAnchorObject->GetLatestPose());
 	}
 
 	if ((bHideWhenNotCurrentlyTracking || bDestroyWhenStoppedTracking) && ARAnchorObject != nullptr)
 	{
 		switch (ARAnchorObject->GetTrackingState())
 		{
-		case EGoogleARCoreAnchorTrackingState::Tracking:
+		case EGoogleARCoreTrackingState::Tracking:
 			SetActorHiddenInGame(false);
 			break;
-		case EGoogleARCoreAnchorTrackingState::NotCurrentlyTracking:
+		case EGoogleARCoreTrackingState::Paused:
 			SetActorHiddenInGame(bHideWhenNotCurrentlyTracking);
 			break;
-		case EGoogleARCoreAnchorTrackingState::StoppedTracking:
+		case EGoogleARCoreTrackingState::Stopped:
 			if (bDestroyWhenStoppedTracking)
 			{
 				Destroy();
@@ -48,7 +48,7 @@ void AGoogleARCoreAnchorActor::BeginDestroy()
 	Super::BeginDestroy();
 }
 
-void AGoogleARCoreAnchorActor::SetARAnchor(UGoogleARCoreAnchorBase* InARAnchorObject)
+void AGoogleARCoreAnchorActor::SetARAnchor(UGoogleARCoreAnchor* InARAnchorObject)
 {
 	if (ARAnchorObject != nullptr && bRemoveAnchorObjectWhenAnchorChanged)
 	{
@@ -56,10 +56,10 @@ void AGoogleARCoreAnchorActor::SetARAnchor(UGoogleARCoreAnchorBase* InARAnchorOb
 	}
 
 	ARAnchorObject = InARAnchorObject;
-	SetActorTransform(ARAnchorObject->GetLatestPose().Pose);
+	SetActorTransform(ARAnchorObject->GetLatestPose());
 }
 
-UGoogleARCoreAnchorBase* AGoogleARCoreAnchorActor::GetARAnchor()
+UGoogleARCoreAnchor* AGoogleARCoreAnchorActor::GetARAnchor()
 {
 	return ARAnchorObject;
 }

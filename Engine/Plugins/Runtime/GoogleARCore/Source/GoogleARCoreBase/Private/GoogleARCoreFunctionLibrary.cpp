@@ -2,25 +2,21 @@
 
 #include "GoogleARCoreFunctionLibrary.h"
 #include "UnrealEngine.h"
-#include "GoogleARCoreBaseLogCategory.h"
-#include "GoogleARCoreAndroidHelper.h"
-#include "GoogleARCoreDevice.h"
-#include "GoogleARCoreHMD.h"
 #include "Engine/Engine.h"
 #include "LatentActions.h"
-#include "GoogleARCorePointCloudManager.h"
 
-#if PLATFORM_ANDROID
-#include "tango_client_api.h"
-#endif
+#include "GoogleARCoreAndroidHelper.h"
+#include "GoogleARCoreBaseLogCategory.h"
+#include "GoogleARCoreDevice.h"
+#include "GoogleARCoreXRTrackingSystem.h"
 
 namespace
 {
-	FGoogleARCoreHMD* GetTangoHMD()
+	FGoogleARCoreXRTrackingSystem* GetARCoreHMD()
 	{
-		if (GEngine->XRSystem.IsValid() && (GEngine->XRSystem->GetSystemName() == FName("FGoogleARCoreHMD")))
+		if (GEngine->XRSystem.IsValid() && (GEngine->XRSystem->GetSystemName() == FName("FGoogleARCoreXRTrackingSystem")))
 		{
-			return static_cast<FGoogleARCoreHMD*>(GEngine->XRSystem.Get());
+			return static_cast<FGoogleARCoreXRTrackingSystem*>(GEngine->XRSystem.Get());
 		}
 
 		return nullptr;
@@ -32,19 +28,14 @@ namespace
 /************************************************************************/
 /*  UGoogleARCoreSessionFunctionLibrary | Lifecycle                     */
 /************************************************************************/
-EGoogleARCoreSupportEnum UGoogleARCoreSessionFunctionLibrary::IsGoogleARCoreSupported()
+EGoogleARCoreSupportStatus UGoogleARCoreSessionFunctionLibrary::GetARCoreSupportStatus()
 {
-	if (FGoogleARCoreDevice::GetInstance()->GetIsGoogleARCoreSupported())
-	{
-		return EGoogleARCoreSupportEnum::Supported;
-	}
-
-	return EGoogleARCoreSupportEnum::NotSupported;
+	return FGoogleARCoreDevice::GetInstance()->GetSupportStatus();
 }
 
-void UGoogleARCoreSessionFunctionLibrary::GetCurrentSessionConfig(FGoogleARCoreSessionConfig& OutCurrentTangoConfig)
+void UGoogleARCoreSessionFunctionLibrary::GetCurrentSessionConfig(FGoogleARCoreSessionConfig& OutCurrentARCoreConfig)
 {
-	FGoogleARCoreDevice::GetInstance()->GetCurrentSessionConfig(OutCurrentTangoConfig);
+	FGoogleARCoreDevice::GetInstance()->GetCurrentSessionConfig(OutCurrentARCoreConfig);
 }
 
 void UGoogleARCoreSessionFunctionLibrary::GetSessionRequiredRuntimPermissionsWithConfig(
@@ -54,36 +45,74 @@ void UGoogleARCoreSessionFunctionLibrary::GetSessionRequiredRuntimPermissionsWit
 	FGoogleARCoreDevice::GetInstance()->GetRequiredRuntimePermissionsForConfiguration(Config, RuntimePermissions);
 }
 
-EGoogleARCoreSessionStatus UGoogleARCoreSessionFunctionLibrary::GetSessionStatus()
+EGoogleARCoreSessionStatus UGoogleARCoreSessionFunctionLibrary::GetARCoreSessionStatus()
 {
-	if (!FGoogleARCoreDevice::GetInstance()->GetIsTangoRunning())
-	{
-		return EGoogleARCoreSessionStatus::NotStarted;
-	}
-
-	FGoogleARCorePose TempPose;
-	if (!FGoogleARCoreDevice::GetInstance()->TangoMotionManager.GetCurrentPose(EGoogleARCoreReferenceFrame::DEVICE, TempPose))
-	{
-		return EGoogleARCoreSessionStatus::NotTracking;
-	}
-
-	return EGoogleARCoreSessionStatus::Tracking;
+	return FGoogleARCoreDevice::GetInstance()->GetSessionStatue();
 }
 
-void UGoogleARCoreSessionFunctionLibrary::StartSession()
+EGoogleARCoreTrackingState UGoogleARCoreFrameFunctionLibrary::GetTrackingState()
 {
-	FGoogleARCoreDevice::GetInstance()->StartTrackingSession();
+	return FGoogleARCoreDevice::GetInstance()->GetTrackingState();
 }
 
-void UGoogleARCoreSessionFunctionLibrary::StartSessionWithConfig(const FGoogleARCoreSessionConfig& Configuration)
+struct FARCoreStartSessionAction : public FPendingLatentAction
 {
-	FGoogleARCoreDevice::GetInstance()->UpdateTangoConfiguration(Configuration);
-	FGoogleARCoreDevice::GetInstance()->StartTrackingSession();
+public:
+	FName ExecutionFunction;
+	int32 OutputLink;
+	FWeakObjectPtr CallbackTarget;
+
+	FARCoreStartSessionAction(const FLatentActionInfo& InLatentInfo)
+		: FPendingLatentAction()
+		, ExecutionFunction(InLatentInfo.ExecutionFunction)
+		, OutputLink(InLatentInfo.Linkage)
+		, CallbackTarget(InLatentInfo.CallbackTarget)
+	{}
+
+	virtual void UpdateOperation(FLatentResponse& Response) override
+	{
+		bool bSessionStartedFinished = FGoogleARCoreDevice::GetInstance()->GetStartSessionRequestFinished();
+		Response.FinishAndTriggerIf(bSessionStartedFinished, ExecutionFunction, OutputLink, CallbackTarget);
+	}
+#if WITH_EDITOR
+	virtual FString GetDescription() const override
+	{
+		return FString::Printf(TEXT("Starting ARCore tracking session"));
+	}
+#endif
+};
+
+void UGoogleARCoreSessionFunctionLibrary::StartSession(UObject* WorldContextObject, struct FLatentActionInfo LatentInfo)
+{
+	if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
+	{
+		FLatentActionManager& LatentManager = World->GetLatentActionManager();
+		if (LatentManager.FindExistingAction<FARCoreStartSessionAction>(LatentInfo.CallbackTarget, LatentInfo.UUID) == nullptr)
+		{
+			FGoogleARCoreDevice::GetInstance()->StartARCoreSessionRequest();
+			FARCoreStartSessionAction* NewAction = new FARCoreStartSessionAction(LatentInfo);
+			LatentManager.AddNewAction(LatentInfo.CallbackTarget, LatentInfo.UUID, NewAction);
+		}
+	}
+}
+
+void UGoogleARCoreSessionFunctionLibrary::StartSessionWithConfig(UObject* WorldContextObject, struct FLatentActionInfo LatentInfo, const FGoogleARCoreSessionConfig& Configuration)
+{
+	if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::LogAndReturnNull))
+	{
+		FLatentActionManager& LatentManager = World->GetLatentActionManager();
+		if (LatentManager.FindExistingAction<FARCoreStartSessionAction>(LatentInfo.CallbackTarget, LatentInfo.UUID) == nullptr)
+		{
+			FGoogleARCoreDevice::GetInstance()->StartARCoreSessionRequest(Configuration);
+			FARCoreStartSessionAction* NewAction = new FARCoreStartSessionAction(LatentInfo);
+			LatentManager.AddNewAction(LatentInfo.CallbackTarget, LatentInfo.UUID, NewAction);
+		}
+	}
 }
 
 void UGoogleARCoreSessionFunctionLibrary::StopSession()
 {
-	FGoogleARCoreDevice::GetInstance()->StopTrackingSession();
+	FGoogleARCoreDevice::GetInstance()->StopARCoreSession();
 }
 
 /************************************************************************/
@@ -91,136 +120,199 @@ void UGoogleARCoreSessionFunctionLibrary::StopSession()
 /************************************************************************/
 bool UGoogleARCoreSessionFunctionLibrary::IsPassthroughCameraRenderingEnabled()
 {
-	FGoogleARCoreHMD* TangoHMD = GetTangoHMD();
-	if (TangoHMD)
+	FGoogleARCoreXRTrackingSystem* ARCoreHMD = GetARCoreHMD();
+	if (ARCoreHMD)
 	{
-		return TangoHMD->GetColorCameraRenderingEnabled();
+		return ARCoreHMD->GetColorCameraRenderingEnabled();
 	}
 	else
 	{
-		UE_LOG(LogGoogleARCore, Error, TEXT("Failed to config TangoHMD: TangoHMD is not available."));
+		UE_LOG(LogGoogleARCore, Error, TEXT("Failed to find GoogleARCoreXRTrackingSystem: GoogleARCoreXRTrackingSystem is not available."));
 	}
 	return false;
 }
 
 void UGoogleARCoreSessionFunctionLibrary::SetPassthroughCameraRenderingEnabled(bool bEnable)
 {
-	FGoogleARCoreHMD* TangoHMD = GetTangoHMD();
-	if (TangoHMD)
+	FGoogleARCoreXRTrackingSystem* ARCoreHMD = GetARCoreHMD();
+	if (ARCoreHMD)
 	{
-		TangoHMD->EnableColorCameraRendering(bEnable);
+		ARCoreHMD->EnableColorCameraRendering(bEnable);
 	}
 	else
 	{
-		UE_LOG(LogGoogleARCore, Error, TEXT("Failed to config TangoHMD: TangoHMD is not available."));
+		UE_LOG(LogGoogleARCore, Error, TEXT("Failed to config ARCoreXRCamera: GoogleARCoreXRTrackingSystem is not available."));
 	}
 }
 
-void UGoogleARCoreSessionFunctionLibrary::GetPassthroughCameraImageUV(TArray<FVector2D>& CameraImageUV)
+void UGoogleARCoreSessionFunctionLibrary::GetPassthroughCameraImageUV(const TArray<float>& InUV, TArray<float>& OutUV)
 {
-	FGoogleARCoreDevice::GetInstance()->TangoARCameraManager.GetCameraImageUV(CameraImageUV);
+	FGoogleARCoreDevice::GetInstance()->GetPassthroughCameraImageUVs(InUV, OutUV);
 }
 
 /************************************************************************/
 /*  UGoogleARCoreSessionFunctionLibrary | ARAnchor                      */
 /************************************************************************/
-bool UGoogleARCoreSessionFunctionLibrary::SpawnARAnchorActor(UObject* WorldContextObject, UClass* ARAnchorActorClass, const FTransform& ARAnchorWorldTransform, AGoogleARCoreAnchorActor*& OutARAnchorActor)
+EGoogleARCoreFunctionStatus UGoogleARCoreSessionFunctionLibrary::SpawnARAnchorActor(UObject* WorldContextObject, UClass* ARAnchorActorClass, const FTransform& ARAnchorWorldTransform, AGoogleARCoreAnchorActor*& OutARAnchorActor)
 {
 	UGoogleARCoreAnchor* NewARAnchorObject = nullptr;
 
 	if (!ARAnchorActorClass->IsChildOf(AGoogleARCoreAnchorActor::StaticClass()))
 	{
 		UE_LOG(LogGoogleARCore, Error, TEXT("Failed to spawn GoogleARAnchorActor. The requested ARAnchorActorClass is not a child of AGoogleARCoreAnchorActor."));
-		return false;
-	}
-
-	if (!UGoogleARCoreSessionFunctionLibrary::CreateARAnchorObject(ARAnchorWorldTransform, NewARAnchorObject))
-	{
-		return false;
+		return EGoogleARCoreFunctionStatus::InvalidType;
 	}
 
 	UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull);
-	if (!World)
+	if (World == nullptr)
 	{
-		return false;
+		return EGoogleARCoreFunctionStatus::Unknown;
 	}
 
-	OutARAnchorActor = World->SpawnActor<AGoogleARCoreAnchorActor>(ARAnchorActorClass, NewARAnchorObject->GetLatestPose().Pose);
+	EGoogleARCoreFunctionStatus Status;
+	Status = UGoogleARCoreSessionFunctionLibrary::CreateARAnchorObject(ARAnchorWorldTransform, NewARAnchorObject);
+	if(Status != EGoogleARCoreFunctionStatus::Success)
+	{
+		return Status;
+	}
+
+	OutARAnchorActor = World->SpawnActor<AGoogleARCoreAnchorActor>(ARAnchorActorClass, NewARAnchorObject->GetLatestPose());
+	if (OutARAnchorActor)
+	{
+		OutARAnchorActor->SetARAnchor(NewARAnchorObject);
+	}
+	
+	return EGoogleARCoreFunctionStatus::Success;
+}
+
+EGoogleARCoreFunctionStatus UGoogleARCoreSessionFunctionLibrary::SpawnARAnchorActorFromHitTest(UObject* WorldContextObject, UClass* ARAnchorActorClass, FGoogleARCoreTraceResult HitTestResult, AGoogleARCoreAnchorActor*& OutARAnchorActor)
+{
+	UGoogleARCoreAnchor* NewARAnchorObject = nullptr;
+
+	if (!ARAnchorActorClass->IsChildOf(AGoogleARCoreAnchorActor::StaticClass()))
+	{
+		UE_LOG(LogGoogleARCore, Error, TEXT("Failed to spawn GoogleARAnchorActor. The requested ARAnchorActorClass is not a child of AGoogleARCoreAnchorActor."));
+		return EGoogleARCoreFunctionStatus::InvalidType;
+	}
+
+	UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull);
+	if (World == nullptr)
+	{
+		return EGoogleARCoreFunctionStatus::Unknown;
+	}
+
+	EGoogleARCoreFunctionStatus Status;
+	Status = UGoogleARCoreSessionFunctionLibrary::CreateARAnchorObjectFromHitTestResult(HitTestResult, NewARAnchorObject);
+	if (Status != EGoogleARCoreFunctionStatus::Success)
+	{
+		return Status;
+	}
+
+	OutARAnchorActor = World->SpawnActor<AGoogleARCoreAnchorActor>(ARAnchorActorClass, NewARAnchorObject->GetLatestPose());
 	if (OutARAnchorActor)
 	{
 		OutARAnchorActor->SetARAnchor(NewARAnchorObject);
 	}
 
-	return OutARAnchorActor != nullptr;
+	return EGoogleARCoreFunctionStatus::Success;
 }
 
-bool UGoogleARCoreSessionFunctionLibrary::CreateARAnchorObject(const FTransform& ARAnchorWorldTransform, UGoogleARCoreAnchor*& OutARAnchorObject)
+EGoogleARCoreFunctionStatus UGoogleARCoreSessionFunctionLibrary::CreateARAnchorObject(const FTransform& ARAnchorWorldTransform, UGoogleARCoreAnchor*& OutARAnchorObject)
 {
-	if (!FGoogleARCoreDevice::GetInstance()->GetIsTangoRunning())
-	{
-		return false;
-	}
-
-	OutARAnchorObject = FGoogleARCoreDevice::GetInstance()->ARAnchorManager->AddARAnchor(ARAnchorWorldTransform);
-
-	return OutARAnchorObject != nullptr;
+	return FGoogleARCoreDevice::GetInstance()->CreateARAnchor(ARAnchorWorldTransform, OutARAnchorObject);
 }
 
-void UGoogleARCoreSessionFunctionLibrary::RemoveGoogleARAnchorObject(UGoogleARCoreAnchorBase* ARAnchorObject)
+EGoogleARCoreFunctionStatus UGoogleARCoreSessionFunctionLibrary::CreateARAnchorObjectFromHitTestResult(FGoogleARCoreTraceResult HitTestResult, UGoogleARCoreAnchor*& OutARAnchorObject)
 {
-	if (FGoogleARCoreDevice::GetInstance()->ARAnchorManager)
-	{
-		FGoogleARCoreDevice::GetInstance()->ARAnchorManager->RemoveARAnchor(ARAnchorObject);
-	}
-}
-/************************************************************************/
-/*  UGoogleARCoreSessionFunctionLibrary | HitTest                       */
-/************************************************************************/
-bool UGoogleARCoreSessionFunctionLibrary::LineTraceSingleOnFeaturePoints(UObject* WorldContextObject, const FVector& Start, const FVector& End, FVector& ImpactPoint)
-{
-	if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull))
-	{
-		FVector ImpactNormal;
-		return FGoogleARCoreDevice::GetInstance()->TangoPointCloudManager.PerformLineTraceOnFeaturePoint(Start, End, ImpactPoint, ImpactNormal);
-	}
-	return false;
+	return FGoogleARCoreDevice::GetInstance()->CreateARAnchorObjectFromHitTestResult(HitTestResult, OutARAnchorObject);
 }
 
-bool UGoogleARCoreSessionFunctionLibrary::LineTraceSingleOnPlanes(UObject* WorldContextObject, const FVector& Start, const FVector& End, FVector& ImpactPoint, FVector& ImpactNormal, UGoogleARCorePlane*& PlaneObject, bool bCheckBoundingBoxOnly)
+void UGoogleARCoreSessionFunctionLibrary::RemoveGoogleARAnchorObject(UGoogleARCoreAnchor* ARAnchorObject)
 {
-	if (UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull))
-	{
-		if (FGoogleARCoreDevice::GetInstance()->PlaneManager)
-		{
-			return FGoogleARCoreDevice::GetInstance()->PlaneManager->PerformLineTraceOnPlanes(Start, End, ImpactPoint, ImpactNormal, PlaneObject, bCheckBoundingBoxOnly);
-		}
-	}
-	return false;
+	return FGoogleARCoreDevice::GetInstance()->DetachARAnchor(static_cast<UGoogleARCoreAnchor*> (ARAnchorObject));
 }
+
+void UGoogleARCoreSessionFunctionLibrary::GetAllPlanes(TArray<UGoogleARCorePlane*>& OutPlaneList)
+{
+	FGoogleARCoreDevice::GetInstance()->GetAllTrackables<UGoogleARCorePlane>(OutPlaneList);
+}
+
+void UGoogleARCoreSessionFunctionLibrary::GetAllTrackablePoints(TArray<UGoogleARCoreTrackablePoint*>& OutTrackablePointList)
+{
+	FGoogleARCoreDevice::GetInstance()->GetAllTrackables<UGoogleARCoreTrackablePoint>(OutTrackablePointList);
+}
+
+void UGoogleARCoreSessionFunctionLibrary::GetAllAnchors(TArray<UGoogleARCoreAnchor*>& OutAnchorList)
+{
+	FGoogleARCoreDevice::GetInstance()->GetAllAnchors(OutAnchorList);
+}
+template< class T > 
+void UGoogleARCoreSessionFunctionLibrary::GetAllTrackable(TArray<T*>& OutTrackableList) 
+{
+	FGoogleARCoreDevice::GetInstance()->GetAllTrackables<T>(OutTrackableList);
+}
+
+template void UGoogleARCoreSessionFunctionLibrary::GetAllTrackable<UGoogleARCoreTrackable>(TArray<UGoogleARCoreTrackable*>& OutTrackableList);
+template void UGoogleARCoreSessionFunctionLibrary::GetAllTrackable<UGoogleARCorePlane>(TArray<UGoogleARCorePlane*>& OutTrackableList);
+template void UGoogleARCoreSessionFunctionLibrary::GetAllTrackable<UGoogleARCoreTrackablePoint>(TArray<UGoogleARCoreTrackablePoint*>& OutTrackableList);
 
 /************************************************************************/
 /*  UGoogleARCoreFrameFunctionLibrary                                   */
 /************************************************************************/
-bool UGoogleARCoreFrameFunctionLibrary::GetLatestPose(EGoogleARCorePoseType RefFrame, FGoogleARCorePose& OutTangoPose)
+void UGoogleARCoreFrameFunctionLibrary::GetLatestPose(FTransform& LastePose)
 {
-	return FGoogleARCoreDevice::GetInstance()->TangoMotionManager.GetCurrentPose(static_cast<EGoogleARCoreReferenceFrame>(RefFrame), OutTangoPose);
+	LastePose = FGoogleARCoreDevice::GetInstance()->GetLatestPose();
 }
 
-void UGoogleARCoreFrameFunctionLibrary::GetAllPlanes(TArray<UGoogleARCorePlane*>& ARCorePlaneList)
+bool UGoogleARCoreFrameFunctionLibrary::ARLineTrace(UObject* WorldContextObject, const FVector2D& ScreenPosition, TSet<EGoogleARCoreLineTraceChannel> ARLineTraceChannels, TArray<FGoogleARCoreTraceResult>& OutHitResults)
 {
-	if (FGoogleARCoreDevice::GetInstance()->PlaneManager)
-	{
-		FGoogleARCoreDevice::GetInstance()->PlaneManager->GetAllPlanes(ARCorePlaneList);
-	}
+	FGoogleARCoreDevice::GetInstance()->ARLineTrace(ScreenPosition, ARLineTraceChannels, OutHitResults);
+	return OutHitResults.Num() > 0;
 }
 
-void UGoogleARCoreFrameFunctionLibrary::GetLatestLightEstimation(float& PixelIntensity)
+void UGoogleARCoreFrameFunctionLibrary::GetUpdatedAnchors(TArray<UGoogleARCoreAnchor*>& OutAnchorList)
 {
-	FGoogleARCoreDevice::GetInstance()->TangoARCameraManager.GetLatestLightEstimation(PixelIntensity);
+	FGoogleARCoreDevice::GetInstance()->GetUpdatedAnchors(OutAnchorList);
 }
 
-FGoogleARCorePointCloud UGoogleARCoreFrameFunctionLibrary::GetLatestPointCloud()
+void UGoogleARCoreFrameFunctionLibrary::GetUpdatedPlanes(TArray<UGoogleARCorePlane*>& OutPlaneList)
 {
-	return FGoogleARCoreDevice::GetInstance()->TangoPointCloudManager.GetLatestPointCloud();
+	FGoogleARCoreDevice::GetInstance()->GetUpdatedTrackables<UGoogleARCorePlane>(OutPlaneList);
 }
 
+void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackablePoints(TArray<UGoogleARCoreTrackablePoint*>& OutTrackablePointList)
+{
+	FGoogleARCoreDevice::GetInstance()->GetUpdatedTrackables<UGoogleARCoreTrackablePoint>(OutTrackablePointList);
+}
+
+void UGoogleARCoreFrameFunctionLibrary::GetLatestLightEstimation(FGoogleARCoreLightEstimate& LightEstimation)
+{
+	LightEstimation = FGoogleARCoreDevice::GetInstance()->GetLatestLightEstimate();
+}
+
+EGoogleARCoreFunctionStatus UGoogleARCoreFrameFunctionLibrary::GetLatestPointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud)
+{
+	return FGoogleARCoreDevice::GetInstance()->GetLatestPointCloud(OutLatestPointCloud);
+}
+
+EGoogleARCoreFunctionStatus UGoogleARCoreFrameFunctionLibrary::AcquireLatestPointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud)
+{
+	return FGoogleARCoreDevice::GetInstance()->AcquireLatestPointCloud(OutLatestPointCloud);
+}
+
+#if PLATFORM_ANDROID
+EGoogleARCoreFunctionStatus UGoogleARCoreFrameFunctionLibrary::GetLatestCameraMetadata(const ACameraMetadata*& OutCameraMetadata)
+{
+	return FGoogleARCoreDevice::GetInstance()->GetLatestCameraMetadata(OutCameraMetadata);
+}
+#endif
+
+template< class T >
+void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackable(TArray<T*>& OutTrackableList)
+{
+	FGoogleARCoreDevice::GetInstance()->GetUpdatedTrackables<T>(OutTrackableList);
+}
+
+template void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackable<UGoogleARCoreTrackable>(TArray<UGoogleARCoreTrackable*>& OutTrackableList);
+template void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackable<UGoogleARCorePlane>(TArray<UGoogleARCorePlane*>& OutTrackableList);
+template void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackable<UGoogleARCoreTrackablePoint>(TArray<UGoogleARCoreTrackablePoint*>& OutTrackableList);

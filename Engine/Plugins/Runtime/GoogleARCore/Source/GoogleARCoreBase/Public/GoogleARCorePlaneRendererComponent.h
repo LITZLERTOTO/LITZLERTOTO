@@ -1,10 +1,9 @@
 // Copyright 2017 Google Inc.
 
 #pragma once
-
-#include "GoogleARCorePrimitives.h"
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
+
 #include "GoogleARCorePlaneRendererComponent.generated.h"
 
 /** A helper component that renders all the ARCore planes in the current tracking session. */

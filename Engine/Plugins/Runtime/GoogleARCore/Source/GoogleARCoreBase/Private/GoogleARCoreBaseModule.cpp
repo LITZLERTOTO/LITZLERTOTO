@@ -7,15 +7,12 @@
 #include "Features/IModularFeature.h"
 
 #include "GoogleARCoreMotionController.h"
-#include "GoogleARCoreHMD.h"
-#include "GoogleARCoreCameraManager.h"
-
+#include "GoogleARCoreXRTrackingSystem.h"
 #include "GoogleARCoreDevice.h"
-#include "GoogleARCoreMotionManager.h"
 #include "ARHitTestingSupport.h"
 
 
-#define LOCTEXT_NAMESPACE "Tango"
+#define LOCTEXT_NAMESPACE "GoogleARCore"
 
 class FGoogleARCoreBaseModule : public IGoogleARCoreBaseModule
 {
@@ -56,7 +53,7 @@ IMPLEMENT_MODULE(FGoogleARCoreBaseModule, GoogleARCoreBase)
 
 TSharedPtr< class IXRTrackingSystem, ESPMode::ThreadSafe > FGoogleARCoreBaseModule::CreateTrackingSystem()
 {
-	TSharedPtr<FGoogleARCoreHMD, ESPMode::ThreadSafe> HMD(new FGoogleARCoreHMD());
+	TSharedPtr<FGoogleARCoreXRTrackingSystem, ESPMode::ThreadSafe> HMD(new FGoogleARCoreXRTrackingSystem());
 	return HMD;
 }
 
@@ -75,7 +72,7 @@ void FGoogleARCoreBaseModule::StartupModule()
         GetMutableDefault<UGoogleARCoreEditorSettings>());
     }
 
-	// Complete Tango setup.
+	// Complete ARCore setup.
 	FGoogleARCoreDevice::GetInstance()->OnModuleLoaded();
 
 	// Register VR-like controller interface.
@@ -95,7 +92,7 @@ void FGoogleARCoreBaseModule::ShutdownModule()
 	// Unregister VR-like controller interface.
 	ControllerInstance.UnregisterController();
 
-	// Complete Tango teardown.
+	// Complete ARCore teardown.
 	FGoogleARCoreDevice::GetInstance()->OnModuleUnloaded();
 
 	// Unregister editor settings.
@@ -103,6 +100,6 @@ void FGoogleARCoreBaseModule::ShutdownModule()
 
 	if (SettingsModule != nullptr)
 	{
-		SettingsModule->UnregisterSettings( "Project", "Plugins", "Tango");
+		SettingsModule->UnregisterSettings( "Project", "Plugins", "GoogleARCore");
 	}
 }
