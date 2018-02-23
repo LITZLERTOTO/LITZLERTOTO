@@ -3,7 +3,7 @@
 #pragma once
 
 #include "Components/ActorComponent.h"
-#include "GoogleARCoreAnchor.h"
+#include "GoogleARCoreTypes.h"
 #include "GameFramework/Actor.h"
 
 #include "GoogleARCoreAnchorActor.generated.h"
@@ -21,38 +21,38 @@ public:
 	 * If set to true, this Actor will use the ARAnchor object's latest
 	 * pose to update its transform.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GoogleARAnchor")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GoogleARCore|ARAnchorActor")
 	bool bTrackingEnabled = true;
 
 	/** If set to true, the Actor will be hidden when the ARAnchor isn't currently tracked.*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GoogleARAnchor")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GoogleARCore|ARAnchorActor")
 	bool bHideWhenNotCurrentlyTracking = true;
 
 	/** If set to true, the Actor will be destroyed when the ARAnchor stops tracking completely.*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GoogleARAnchor")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GoogleARCore|ARAnchorActor")
 	bool bDestroyWhenStoppedTracking = true;
 
 	/**
 	 * If set to true, this Actor will remove the ARCoreAnchor object from the current tracking
 	 * session when the Actor gets destroyed.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GoogleARAnchor")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GoogleARCore|ARAnchorActor")
 	bool bRemoveAnchorObjectWhenDestroyed = true;
 
 	/**
 	 * When set to true, if SetARAnchor() is called and a previous anchor had already been set, the
 	 * previous anchor will be removed from the current tracking session.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GoogleARAnchor")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "GoogleARCore|ARAnchorActor")
 	bool bRemoveAnchorObjectWhenAnchorChanged = true;
 
 	/** Connects an ARCoreAnchor object to this Actor. */
-	UFUNCTION(BlueprintCallable, Category = "GoogleARAnchor")
-	void SetARAnchor(UGoogleARCoreAnchorBase* InARAnchorObject);
+	UFUNCTION(BlueprintCallable, Category = "GoogleARCore|ARAnchorActor")
+	void SetARAnchor(UGoogleARCoreAnchor* InARAnchorObject);
 
 	/** Returns the ARCoreAnchor object that is connected with this Actor. */
-	UFUNCTION(BlueprintPure, Category = "GoogleARAnchor")
-	UGoogleARCoreAnchorBase* GetARAnchor();
+	UFUNCTION(BlueprintPure, Category = "GoogleARCore|ARAnchorActor")
+	UGoogleARCoreAnchor* GetARAnchor();
 
 	/** Tick function on this Actor.*/
 	virtual void Tick(float DeltaSeconds) override;
@@ -63,5 +63,5 @@ public:
 private:
 	/** Pointer to the ARAnchorObject. */
 	UPROPERTY()
-	UGoogleARCoreAnchorBase* ARAnchorObject;
+	UGoogleARCoreAnchor* ARAnchorObject;
 };

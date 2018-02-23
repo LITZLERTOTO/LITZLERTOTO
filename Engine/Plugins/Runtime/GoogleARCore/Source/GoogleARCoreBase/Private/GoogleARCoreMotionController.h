@@ -39,5 +39,5 @@ public:
 	virtual FName GetMotionControllerDeviceTypeName() const override;
 
 private:
-	FGoogleARCoreDevice* TangoDeviceInstance;
+	FGoogleARCoreDevice* ARCoreDeviceInstance;
 };

@@ -5,21 +5,11 @@
 #include "CoreDelegates.h"
 #include "Engine/EngineBaseTypes.h"
 #include "HAL/ThreadSafeBool.h"
-#include "GoogleARCorePrimitives.h"
-#include "GoogleARCoreMotionManager.h"
-#include "GoogleARCoreCameraManager.h"
-#include "GoogleARCorePointCloudManager.h"
-#include "GoogleARCorePlaneManager.h"
-#include "GoogleARCoreAnchorManager.h"
+#include "Containers/Queue.h"
 
-#if PLATFORM_ANDROID
-#include "tango_client_api2.h"
-#endif
-
-#define ENABLE_ARCORE_DEBUG_LOG 1
-
-DECLARE_MULTICAST_DELEGATE(FOnTangoServiceBound);
-DECLARE_MULTICAST_DELEGATE(FOnTangoServiceUnbound);
+#include "GoogleARCoreTypes.h"
+#include "GoogleARCoreAPI.h"
+#include "GoogleARCorePassthroughCameraRenderer.h"
 
 class FGoogleARCoreDevice
 {
@@ -28,79 +18,75 @@ public:
 
 	FGoogleARCoreDevice();
 
-	bool GetIsGoogleARCoreSupported();
+	EGoogleARCoreAvailability CheckARCoreAPKAvailability();
 
-	/**
-	 * Whether a proper connection with the Tango Core system service is currently established.
-	 * When this is is false much of Tango's functionality will be unavailable.
-	 *
-	 * Note that it is technically possible for Tango to stop at any time (for instance, if the Tango Core service
-	 * is updated on the device), and thus does not guarantee that Tango will still be bound during
-	 * subsequent calls to anything.
-	 * @return True if a proper connection with the Tango Core system service is currently established.
-	 */
-	bool GetIsTangoBound();
+	EGoogleARCoreAPIStatus RequestInstall(bool bUserRequestedInstall, EGoogleARCoreInstallStatus& OutInstallStatus);
 
-	/**
-	 * Get whether Tango is currently running.
-	 *
-	 * Note that it is technically possible for Tango to stop at any time (for instance, if the Tango Core service
-	 * is updated on the device), and thus does not guarantee that Tango will still be bound and running during
-	 * subsequent calls to anything.
-	 * @return True if Tango is currently running.
-	 */
-	bool GetIsTangoRunning();
+	bool GetIsARCoreSessionRunning();
 
-	/**
-	 * Update Tango plugin to use a new configuration.
-	 */
-	void UpdateTangoConfiguration(const FGoogleARCoreSessionConfig& NewConfiguration);
-
-	/**
-	 * Reset Tango plugin to use the global project Tango configuration.
-	 */
-	void ResetTangoConfiguration();
-
-	void GetCurrentSessionConfig(FGoogleARCoreSessionConfig& OutCurrentTangoConfig);
-
-#if PLATFORM_ANDROID
-	/**
-	 * Get the current TangoConfig object that Tango is running with. Will return NULL if Tango is not running.
-	 */
-	TangoConfig GetCurrentLowLevelTangoConfig();
-#endif
-
-	/**
-	 * Get the current base frame Tango is running on.
-	 */
-	EGoogleARCoreReferenceFrame GetCurrentBaseFrame();
-
-	/**
-	 * Get the base frame Tango from the given Tango configuration.
-	 */
-	EGoogleARCoreReferenceFrame GetBaseFrame(FGoogleARCoreSessionConfig TangoConfig);
-
-	/**
-	 * Get Unreal Units per meter, based off of the current map's VR World to Meters setting.
-	 * @return Unreal Units per meter.
-	 */
+	void GetSessionStatue(EGoogleARCoreSessionStatus& OutStatus, EGoogleARCoreSessionErrorReason& OutError);
+	
+	// Get Unreal Units per meter, based off of the current map's VR World to Meters setting.
 	float GetWorldToMetersScale();
 
-	int32 GetDepthCameraFrameRate();
-	bool SetDepthCameraFrameRate(int32 NewFrameRate);
+	// Start ARSession with custom session config.
+	void StartARCoreSessionRequest(const FGoogleARCoreSessionConfig& SessionConfig);
 
-public:
-	FGoogleARCoreMotionManager TangoMotionManager;
-	FGoogleARCoreCameraManager TangoARCameraManager;
-	FGoogleARCorePointCloudManager TangoPointCloudManager;
-	UGoogleARCoreAnchorManager* ARAnchorManager;
-	UGoogleARCorePlaneManager* PlaneManager;
+	// Get the current session configuration ARCore is running with. Return false if the session isn't running.
+	bool GetCurrentSessionConfig(FGoogleARCoreSessionConfig& OutCurrentARCoreConfig);
 
-	FOnTangoServiceBound OnTangoServiceBoundDelegate;
-	FOnTangoServiceUnbound OnTangoServiceUnboundDelegate;
+	bool GetStartSessionRequestFinished();
+	
+	void PauseARCoreSession();
 
-	void StartTrackingSession();
-	void StopTrackingSession();
+	void ResetARCoreSession();
+	
+	void AllocatePassthroughCameraTexture_RenderThread();
+	FTextureRHIRef GetPassthroughCameraTexture();
+
+	// Passthrough Camera
+	FMatrix GetPassthroughCameraProjectionMatrix(FIntPoint ViewRectSize) const;
+	void GetPassthroughCameraImageUVs(const TArray<float>& InUvs, TArray<float>& OutUVs) const;
+
+	// Frame
+	EGoogleARCoreTrackingState GetTrackingState() const;
+	FTransform GetLatestPose() const;
+	FGoogleARCoreLightEstimate GetLatestLightEstimate() const;
+	EGoogleARCoreFunctionStatus GetLatestPointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud) const;
+	EGoogleARCoreFunctionStatus AcquireLatestPointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud) const;
+#if PLATFORM_ANDROID
+	EGoogleARCoreFunctionStatus GetLatestCameraMetadata(const ACameraMetadata*& OutCameraMetadata) const;
+#endif
+	// Hit test
+	void ARLineTrace(const FVector2D& ScreenPosition, TSet<EGoogleARCoreLineTraceChannel> ARObjectType, TArray<FGoogleARCoreTraceResult>& OutHitResults);
+
+	// Anchor, Planes
+	EGoogleARCoreFunctionStatus CreateARAnchor(const FTransform& ARAnchorWorldTransform, UGoogleARCoreAnchor*& OutARAnchorObject);
+	EGoogleARCoreFunctionStatus CreateARAnchorObjectFromHitTestResult(FGoogleARCoreTraceResult HitTestResult, UGoogleARCoreAnchor*& OutARAnchorObject);
+	void DetachARAnchor(UGoogleARCoreAnchor* ARAnchorObject);
+
+	void GetAllAnchors(TArray<UGoogleARCoreAnchor*>& ARCoreAnchorList);
+	void GetUpdatedAnchors(TArray<UGoogleARCoreAnchor*>& ARCoreAnchorList);
+
+	template< class T >
+	void GetUpdatedTrackables(TArray<T*>& OutARCoreTrackableList)
+	{
+		if (!bIsARCoreSessionRunning)
+		{
+			return;
+		}
+		ARCoreSession->GetLatestFrame()->GetUpdatedTrackables<T>(OutARCoreTrackableList);
+	}
+
+	template< class T >
+	void GetAllTrackables(TArray<T*>& OutARCoreTrackableList)
+	{
+		if (!bIsARCoreSessionRunning)
+		{
+			return;
+		}
+		ARCoreSession->GetAllTrackables<T>(OutARCoreTrackableList);
+	}
 
 	void RunOnGameThread(TFunction<void()> Func)
 	{
@@ -115,11 +101,8 @@ public:
 	}
 	void HandleRuntimePermissionsGranted(const TArray<FString>& Permissions, const TArray<bool>& Granted);
 
-	void SetForceLateUpdateEnable(bool bEnable)
-	{
-		bForceLateUpdateEnabled = bEnable;
-	}
-
+	// Function that is used to call from the Android UI thread:
+	void StartSessionWithRequestedConfig();
 private:
 	// Android lifecycle events.
 	void OnApplicationCreated();
@@ -129,50 +112,45 @@ private:
 	void OnApplicationStart();
 	void OnApplicationStop();
 	void OnDisplayOrientationChanged();
-	void OnAreaDescriptionPermissionResult(bool bWasGranted);
+
 	// Unreal plugin events.
 	void OnModuleLoaded();
 	void OnModuleUnloaded();
 
 	void OnWorldTickStart(ELevelTick TickType, float DeltaTime);
 
-	bool BindTangoServiceAndCheckPermission(const FGoogleARCoreSessionConfig& ConfigurationData);
-	bool StartSession(const FGoogleARCoreSessionConfig& ConfigurationData);
+	void CheckAndRequrestPermission(const FGoogleARCoreSessionConfig& ConfigurationData);
 
-#if PLATFORM_ANDROID
-	// Tango Service bound event
-	void OnTangoServiceBound();
-#endif
+	void StartSession(const FGoogleARCoreSessionConfig& ConfigurationData);
 
 	friend class FGoogleARCoreAndroidHelper;
 	friend class FGoogleARCoreBaseModule;
 
 private:
-	bool bIsARCoreSupported;
-	bool bNeedToCreateTangoObject;
-	FThreadSafeBool bTangoIsBound; // Whether a proper connection with the Tango Core system service is currently established.
-	FThreadSafeBool bTangoIsRunning; // Whether Tango is currently running.
+	TSharedPtr<FGoogleARCoreSession> ARCoreSession;
+	FTextureRHIRef PassthroughCameraTexture;
+	uint32 PassthroughCameraTextureId;
+	bool bIsARCoreSessionRunning;
 	bool bForceLateUpdateEnabled; // A debug flag to force use late update.
-	bool bTangoConfigChanged;
-	bool bAreaDescriptionPermissionRequested;
+	bool bSessionConfigChanged;
 	bool bAndroidRuntimePermissionsRequested;
 	bool bAndroidRuntimePermissionsGranted;
-	bool bStartTangoTrackingRequested; // User called StartSession
-	bool bShouldTangoRestart; // Start tracking on activity start
+	bool bPermissionDeniedByUser;
+	bool bStartSessionRequested; // User called StartSession
+	bool bShouldSessionRestart; // Start tracking on activity start
+	bool bARCoreInstallRequested;
+	bool bARCoreInstalled;
 	float WorldToMeterScale;
-	class UTangoAndroidPermissionHandler* PermissionHandler;
+	class UARCoreAndroidPermissionHandler* PermissionHandler;
 	FThreadSafeBool bDisplayOrientationChanged;
 
-	FGoogleARCoreSessionConfig ProjectTangoConfig; // Project Tango config set from Tango Plugin Setting
-	FGoogleARCoreSessionConfig RequestTangoConfig; // The current request tango config, could be different than the project config
-	FGoogleARCoreSessionConfig LastKnownConfig; // Record of the configuration Tango was last successfully started with
+	EGoogleARCoreSessionStatus CurrentSessionStatus;
+	EGoogleARCoreSessionErrorReason CurrentSessionError;
 
-#if PLATFORM_ANDROID
-	TangoConfig LowLevelTangoConfig; // Low level Tango Config object in Tango client api
-#endif
+	FGoogleARCoreSessionConfig RequestARCoreConfig; // The current request ARCore config, could be different than the project config
+	FGoogleARCoreSessionConfig LastKnownARCoreConfig; // Record of the configuration ARCore was last successfully started with
 
-	static void TangoEventRouter(void *Ptr, const struct TangoEvent* Event);
-	void OnTangoEvent(const struct TangoEvent* Event);
+	FGoogleARCoreDeviceCameraBlitter CameraBlitter;
 
 	TQueue<TFunction<void()>> RunOnGameThreadQueue;
 };

@@ -23,6 +23,7 @@ namespace UnrealBuildTool.Rules
 					"Core",
 					"CoreUObject",
 					"Engine",
+					"EngineSettings",
 					"Slate",
 					"SlateCore",
 					"RHI",
@@ -31,9 +32,10 @@ namespace UnrealBuildTool.Rules
 					"HeadMountedDisplay", // For IMotionController interface.
 					"AndroidPermission",
 					"GoogleARCoreRendering",
-					"TangoSDK",
-                    "AugmentedReality"
-                }
+					"GoogleARCoreSDK",
+					"AugmentedReality",
+					"OpenGL"
+				}
 			);
 
 			PrivateIncludePathModuleNames.AddRange(

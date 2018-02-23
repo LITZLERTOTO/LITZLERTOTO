@@ -12,9 +12,9 @@
 #include "ARTrackingQuality.h"
 
 /**
-* Tango Head Mounted Display used for Argument Reality
+* GoogleARCore implementation of FXRTrackingSystemBase
 */
-class FGoogleARCoreHMD : public FXRTrackingSystemBase, public IARHitTestingSupport, public IARTrackingQuality, public TSharedFromThis<FGoogleARCoreHMD, ESPMode::ThreadSafe>
+class FGoogleARCoreXRTrackingSystem : public FXRTrackingSystemBase, public IARHitTestingSupport, public IARTrackingQuality, public TSharedFromThis<FGoogleARCoreXRTrackingSystem, ESPMode::ThreadSafe>
 {
 	friend class FGoogleARCoreXRCamera;
 
@@ -40,12 +40,6 @@ public:
 	// TODO: Figure out if we need to allow developer set/reset base orientation and position.
 	virtual void ResetOrientationAndPosition(float yaw = 0.f) override {}
 
-	/** Console command Handles */
-	void TangoHMDEnableCommandHandler(const TArray<FString>& Args, UWorld* World, FOutputDevice& Ar);
-	void ARCameraModeEnableCommandHandler(const TArray<FString>& Args, UWorld* World, FOutputDevice& Ar);
-	void ColorCamRenderingEnableCommandHandler(const TArray<FString>& Args, UWorld* World, FOutputDevice& Ar);
-	void LateUpdateEnableCommandHandler(const TArray<FString>& Args, UWorld* World, FOutputDevice& Ar);
-
 	// @todo move this to some interface
 	virtual float GetWorldToMetersScale() const override;
 
@@ -59,51 +53,29 @@ public:
 	//~ IARTrackingQuality
 
 public:
-	FGoogleARCoreHMD();
+	FGoogleARCoreXRTrackingSystem();
 
-	~FGoogleARCoreHMD();
+	~FGoogleARCoreXRTrackingSystem();
 
-	/** Config the TangoHMD.
-	* When bEnableHMD is true, TangoHMD will update game camera position and orientation using Tango pose.
-	* When bEnableARCamera is true, TangoHMD will sync the camera projection matrix with Tango color camera
-	* and render the color camera video overlay
-	*/
-	void ConfigTangoHMD(bool bEnableHMD, bool bEnableARCamera, bool bUseLateUpdate);
+	void ConfigARCoreXRCamera(bool bMatchCameraFOV, bool bEnablePassthroughRendering);
 
 	void EnableColorCameraRendering(bool bEnableColorCameraRnedering);
 
 	bool GetColorCameraRenderingEnabled();
 
-	bool GetTangoHMDARModeEnabled();
-
-	bool GetTangoHMDLateUpdateEnabled();
-
 private:
-	FGoogleARCoreDevice* TangoDeviceInstance;
+	FGoogleARCoreDevice* ARCoreDeviceInstance;
 
-	bool bHMDEnabled;
-	bool bSceneViewExtensionRegistered;
-	bool bARCameraEnabled;
-	bool bColorCameraRenderingEnabled;
+	bool bMatchDeviceCameraFOV;
+	bool bEnablePassthroughCameraRendering;
 	bool bHasValidPose;
-	bool bLateUpdateEnabled;
-	bool bNeedToFlipCameraImage;
 
 	FVector CachedPosition;
 	FQuat CachedOrientation;
 	FRotator DeltaControlRotation;    // same as DeltaControlOrientation but as rotator
 	FQuat DeltaControlOrientation; // same as DeltaControlRotation but as quat
 
-	bool bLateUpdatePoseIsValid;
-	FGoogleARCorePose LateUpdatePose;
-
 	TSharedPtr<class ISceneViewExtension, ESPMode::ThreadSafe> ViewExtension;
-
-	/** Console commands */
-	FAutoConsoleCommand TangoHMDEnableCommand;
-	FAutoConsoleCommand ARCameraModeEnableCommand;
-	FAutoConsoleCommand ColorCamRenderingEnableCommand;
-	FAutoConsoleCommand LateUpdateEnableCommand;
 };
 
-DEFINE_LOG_CATEGORY_STATIC(LogGoogleARCoreHMD, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogGoogleARCoreTrackingSystem, Log, All);

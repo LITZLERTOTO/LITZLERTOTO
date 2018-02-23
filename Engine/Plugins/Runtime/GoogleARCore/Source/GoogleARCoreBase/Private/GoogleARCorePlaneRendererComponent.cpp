@@ -1,9 +1,9 @@
 // Copyright 2017 Google Inc.
 
 #include "GoogleARCorePlaneRendererComponent.h"
-#include "GoogleARCoreFunctionLibrary.h"
 #include "DrawDebugHelpers.h"
-#include "GoogleARCorePlane.h"
+#include "GoogleARCoreFunctionLibrary.h"
+#include "GoogleARCoreTypes.h"
 
 UGoogleARCorePlaneRendererComponent::UGoogleARCorePlaneRendererComponent()
 {
@@ -22,44 +22,44 @@ void UGoogleARCorePlaneRendererComponent::TickComponent(float DeltaTime, enum EL
 void UGoogleARCorePlaneRendererComponent::DrawPlanes()
 {
 	UWorld* World = GetWorld();
-#if PLATFORM_ANDROID
-	if (UGoogleARCoreSessionFunctionLibrary::GetSessionStatus() == EGoogleARCoreSessionStatus::Tracking)
+	if (UGoogleARCoreFrameFunctionLibrary::GetTrackingState() == EGoogleARCoreTrackingState::Tracking)
 	{
 		TArray<UGoogleARCorePlane*> PlaneList;
-		UGoogleARCoreFrameFunctionLibrary::GetAllPlanes(PlaneList);
+		UGoogleARCoreSessionFunctionLibrary::GetAllPlanes(PlaneList);
 		for (UGoogleARCorePlane* Plane : PlaneList)
 		{
-			if (Plane->GetTrackingState() != EGoogleARCorePlaneTrackingState::Tracking)
+			if (Plane->GetTrackingState() != EGoogleARCoreTrackingState::Tracking)
 			{
 				continue;
 			}
 
 			if (bRenderPlane)
 			{
-				FTransform BoundingBoxTransform = Plane->GetBoundingBoxWorldTransform();
+				FTransform BoundingBoxTransform = Plane->GetCenterPose();
 				FVector BoundingBoxLocation = BoundingBoxTransform.GetLocation();
-				FVector2D BoundingBoxSize = Plane->GetBoundingBoxSize();
+				FVector BoundingBoxExtent = Plane->GetExtents();
 
 				PlaneVertices.Empty();
-				PlaneVertices.Add(BoundingBoxTransform.TransformPosition(FVector(-BoundingBoxSize.X / 2.0f, -BoundingBoxSize.Y / 2.0f, 0)));
-				PlaneVertices.Add(BoundingBoxTransform.TransformPosition(FVector(-BoundingBoxSize.X / 2.0f, BoundingBoxSize.Y / 2.0f, 0)));
-				PlaneVertices.Add(BoundingBoxTransform.TransformPosition(FVector(BoundingBoxSize.X / 2.0f, BoundingBoxSize.Y / 2.0f, 0)));
-				PlaneVertices.Add(BoundingBoxTransform.TransformPosition(FVector(BoundingBoxSize.X / 2.0f, -BoundingBoxSize.Y / 2.0f, 0)));
+				PlaneVertices.Add(BoundingBoxTransform.TransformPosition(FVector(-BoundingBoxExtent.X / 2.0f, -BoundingBoxExtent.Y / 2.0f, 0)));
+				PlaneVertices.Add(BoundingBoxTransform.TransformPosition(FVector(-BoundingBoxExtent.X / 2.0f, BoundingBoxExtent.Y / 2.0f, 0)));
+				PlaneVertices.Add(BoundingBoxTransform.TransformPosition(FVector(BoundingBoxExtent.X / 2.0f, BoundingBoxExtent.Y / 2.0f, 0)));
+				PlaneVertices.Add(BoundingBoxTransform.TransformPosition(FVector(BoundingBoxExtent.X / 2.0f, -BoundingBoxExtent.Y / 2.0f, 0)));
 				// plane quad
 				DrawDebugMesh(World, PlaneVertices, PlaneIndices, PlaneColor);
 			}
 
 			if (bRenderBoundaryPolygon)
 			{
-				const TArray<FVector>& BoundaryPolygonData = Plane->GetWorldSpaceBoundaryPolygon();
+				TArray<FVector> BoundaryPolygonData;
+				Plane->GetBoundaryPolygonInLocalSpace(BoundaryPolygonData);
+				FTransform PlaneCenter = Plane->GetCenterPose();
 				for (int i = 0; i < BoundaryPolygonData.Num(); i++)
 				{
-					FVector Start = BoundaryPolygonData[i];
-					FVector End = BoundaryPolygonData[(i + 1) % BoundaryPolygonData.Num()];
+					FVector Start = PlaneCenter.TransformPosition(BoundaryPolygonData[i]);
+					FVector End = PlaneCenter.TransformPosition(BoundaryPolygonData[(i + 1) % BoundaryPolygonData.Num()]);
 					DrawDebugLine(World, Start, End, BoundaryPolygonColor, false, -1.f, 0, BoundaryPolygonThickness);
 				}
 			}
 		}
 	}
-#endif
 }
