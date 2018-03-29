@@ -57,6 +57,9 @@ namespace UnrealBuildTool.Rules
 
 				// Register Plugin Language
 				AdditionalPropertiesForReceipt.Add("AndroidPlugin", Path.Combine(ModuleDirectory, "GoogleARCoreBase_APL.xml"));
+
+				// Camera CPU image access dependency.
+				PublicAdditionalLibraries.Add("mediandk");
 			}
 
 			bFasterWithoutUnity = false;

@@ -109,9 +109,7 @@ bool FGoogleARCoreXRTrackingSystem::OnStartGameFrame(FWorldContext& WorldContext
 		FGoogleARCoreLightEstimate ARCoreLightEstimate = FGoogleARCoreDevice::GetInstance()->GetLatestLightEstimate();
 		if (ARCoreLightEstimate.bIsValid)
 		{
-			// Try to convert ARCore average pixel intensity to lumen and set the color tempature to pure white.
-			float LightLumen = ARCoreLightEstimate.PixelIntensity / 0.18f * 1000;
-			LightEstimate->SetLightEstimate(LightLumen, 6500);
+			LightEstimate->SetLightEstimate(ARCoreLightEstimate.RGBScaleFactor, ARCoreLightEstimate.PixelIntensity);
 		}
 		else
 		{

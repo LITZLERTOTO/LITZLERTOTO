@@ -19,7 +19,7 @@
 
 #include "GoogleARCorePermissionHandler.h"
 
-namespace 
+namespace
 {
 	EGoogleARCoreFunctionStatus ToARCoreFunctionStatus(EGoogleARCoreAPIStatus Status)
 	{
@@ -627,4 +627,14 @@ UARSessionConfig* FGoogleARCoreDevice::AccessSessionConfig() const
 	return (ARSystem.IsValid())
 		? &ARSystem->AccessSessionConfig()
 		: nullptr;
+}
+
+EGoogleARCoreFunctionStatus FGoogleARCoreDevice::AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage)
+{
+	if (!bIsARCoreSessionRunning)
+	{
+		return EGoogleARCoreFunctionStatus::SessionPaused;
+	}
+
+	return ToARCoreFunctionStatus(ARCoreSession->AcquireCameraImage(OutLatestCameraImage));
 }

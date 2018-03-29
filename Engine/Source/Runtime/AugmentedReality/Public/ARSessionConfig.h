@@ -64,7 +64,7 @@ class AUGMENTEDREALITY_API UARSessionConfig : public UDataAsset
 	GENERATED_BODY()
 
 public:
-
+	
 	UARSessionConfig();
 	
 public:
@@ -86,7 +86,7 @@ public:
 	/** @see bEnableAutomaticCameraTracking */
 	bool ShouldEnableCameraTracking() const;
 
-private:
+protected:
 	
 	/** @see EARSessionType */
 	UPROPERTY(EditAnywhere, Category = "AR Settings")

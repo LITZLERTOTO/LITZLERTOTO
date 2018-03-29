@@ -24,11 +24,11 @@ public:
 	EGoogleARCoreAPIStatus RequestInstall(bool bUserRequestedInstall, EGoogleARCoreInstallStatus& OutInstallStatus);
 
 	bool GetIsTrackingTypeSupported(EARSessionType SessionType);
-	
+
 	bool GetIsARCoreSessionRunning();
 
 	EARSessionStatus GetSessionStatus();
-	
+
 	// Get Unreal Units per meter, based off of the current map's VR World to Meters setting.
 	float GetWorldToMetersScale();
 
@@ -36,11 +36,11 @@ public:
 	void StartARCoreSessionRequest(UARSessionConfig* SessionConfig);
 
 	bool GetStartSessionRequestFinished();
-	
+
 	void PauseARCoreSession();
 
 	void ResetARCoreSession();
-	
+
 	void AllocatePassthroughCameraTexture_RenderThread();
 	FTextureRHIRef GetPassthroughCameraTexture();
 
@@ -105,6 +105,8 @@ public:
 
 	TSharedPtr<FARSystemBase, ESPMode::ThreadSafe> GetARSystem();
 	void SetARSystem(TSharedPtr<FARSystemBase, ESPMode::ThreadSafe> InARSystem);
+
+	EGoogleARCoreFunctionStatus AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage);
 
 private:
 	// Android lifecycle events.
