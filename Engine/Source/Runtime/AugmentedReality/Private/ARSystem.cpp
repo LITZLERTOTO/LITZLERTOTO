@@ -105,7 +105,9 @@ bool FARSystemBase::IsSessionTypeSupported(EARSessionType SessionType) const
 
 void FARSystemBase::SetAlignmentTransform( const FTransform& InAlignmentTransform )
 {
-	return OnSetAlignmentTransform(InAlignmentTransform);
+	OnSetAlignmentTransform(InAlignmentTransform);
+	OnAlignmentTransformUpdated.Broadcast(InAlignmentTransform);
+
 }
 
 

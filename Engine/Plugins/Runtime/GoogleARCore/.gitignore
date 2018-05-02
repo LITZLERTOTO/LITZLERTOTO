@@ -1,3 +1,5 @@
 !Content/
 !Content/**/*.uasset
 !/DOCBUILD
+!Tools/**
+

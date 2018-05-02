@@ -227,7 +227,7 @@ void FGoogleARCoreDevice::OnWorldTickStart(ELevelTick TickType, float DeltaTime)
 		}
 		else
 		{
-			CameraBlitter.DoBlit(PassthroughCameraTextureId, FIntPoint(1080, 1920));
+			CameraBlitter.DoBlit(PassthroughCameraTextureId, FIntPoint(1920, 1080));
 		}
 	}
 }
@@ -383,12 +383,30 @@ void FGoogleARCoreDevice::StartSession()
 	bIsARCoreSessionRunning = true;
 	CurrentSessionStatus = EARSessionStatus::Running;
 	UE_LOG(LogGoogleARCore, Log, TEXT("ARCore session started successfully."));
+
+	ARSystem->OnARSessionStarted.Broadcast();
 }
 
 void FGoogleARCoreDevice::SetARSystem(TSharedPtr<FARSystemBase, ESPMode::ThreadSafe> InARSystem)
 {
 	check(InARSystem.IsValid());
 	ARSystem = InARSystem;
+}
+
+void* FGoogleARCoreDevice::GetARSessionRawPointer()
+{
+#if PLATFORM_ANDROID
+	return reinterpret_cast<void*>(ARCoreSession->GetHandle());
+#endif
+	return nullptr;
+}
+
+void* FGoogleARCoreDevice::GetGameThreadARFrameRawPointer()
+{
+#if PLATFORM_ANDROID
+	return reinterpret_cast<void*>(ARCoreSession->GetLatestFrameRawPointer());
+#endif
+	return nullptr;
 }
 
 TSharedPtr<FARSystemBase, ESPMode::ThreadSafe> FGoogleARCoreDevice::GetARSystem()

@@ -56,6 +56,7 @@ struct APPLEARKIT_API FAppleARKitFrame
     CVMetalTextureRef CapturedYImage;
     CVMetalTextureRef CapturedCbCrImage;
     
+	void* NativeFrame;
 #endif // ARKIT_SUPPORT
 
 	/** The width and height in pixels of the frame's captured images. */
@@ -72,6 +73,7 @@ struct APPLEARKIT_API FAppleARKitFrame
 	 * A light estimate representing the estimated light in the scene.
 	 */
 	FAppleARKitLightEstimate LightEstimate;
+
 
 	/* 
 	 * When adding new member variables, don't forget to handle them in the copy constructor and

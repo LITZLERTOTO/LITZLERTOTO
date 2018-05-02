@@ -10,6 +10,7 @@ FAppleARKitFrame::FAppleARKitFrame()
 #if ARKIT_SUPPORT && __IPHONE_OS_VERSION_MAX_ALLOWED >= 110000
 	: CapturedYImage(nullptr)
 	, CapturedCbCrImage( nullptr )
+	, NativeFrame(nullptr)
 #endif
 {
 };
@@ -61,6 +62,8 @@ FAppleARKitFrame::FAppleARKitFrame( ARFrame* InARFrame, CVMetalTextureCacheRef M
 		check( CapturedCbCrImage );
 		check( CFGetRetainCount(CapturedCbCrImage) == 1);
 	}
+
+	NativeFrame = (void*)CFRetain(InARFrame);
 }
 
 FAppleARKitFrame::FAppleARKitFrame( const FAppleARKitFrame& Other )
@@ -74,6 +77,10 @@ FAppleARKitFrame::FAppleARKitFrame( const FAppleARKitFrame& Other )
   , Camera( Other.Camera )
   , LightEstimate( Other.LightEstimate )
 {
+	if(Other.NativeFrame != nullptr)
+	{
+		NativeFrame = (void*)CFRetain((CFTypeRef)Other.NativeFrame);
+	}
 }
 
 FAppleARKitFrame::~FAppleARKitFrame()
@@ -87,7 +94,11 @@ FAppleARKitFrame::~FAppleARKitFrame()
 	{
 		CFRelease( CapturedCbCrImage );
 	}
-	
+
+	if(NativeFrame != nullptr)
+	{
+		CFRelease((CFTypeRef)NativeFrame);
+	}
 }
 
 FAppleARKitFrame& FAppleARKitFrame::operator=( const FAppleARKitFrame& Other )
@@ -101,6 +112,17 @@ FAppleARKitFrame& FAppleARKitFrame::operator=( const FAppleARKitFrame& Other )
 	{
 		CFRelease( CapturedCbCrImage );
 	}
+
+	if(NativeFrame != nullptr)
+	{
+		CFRelease((CFTypeRef)NativeFrame);
+		NativeFrame = nullptr;
+	}
+
+	if(Other.NativeFrame != nullptr)
+	{
+		NativeFrame = (void*)CFRetain((CFTypeRef)Other.NativeFrame);
+	}
 	
 	// Member-wise copy
 	Timestamp = Other.Timestamp;
@@ -112,6 +134,8 @@ FAppleARKitFrame& FAppleARKitFrame::operator=( const FAppleARKitFrame& Other )
 	CapturedCbCrImageHeight = Other.CapturedCbCrImageHeight;
 	Camera = Other.Camera;
 	LightEstimate = Other.LightEstimate;
+
+	NativeFrame = Other.NativeFrame;
 
 	return *this;
 }

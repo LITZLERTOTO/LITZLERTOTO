@@ -38,6 +38,9 @@ public:
 	// @todo move this to some interface
 	virtual float GetWorldToMetersScale() const override;
 
+	void* GetARSessionRawPointer() override;
+	void* GetGameThreadARFrameRawPointer() override;
+
 protected:
 	// IARSystemSupport
 	virtual void OnARSystemInitialized() override;

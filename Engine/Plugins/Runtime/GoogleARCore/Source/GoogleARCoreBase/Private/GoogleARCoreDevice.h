@@ -57,6 +57,8 @@ public:
 #if PLATFORM_ANDROID
 	EGoogleARCoreFunctionStatus GetLatestCameraMetadata(const ACameraMetadata*& OutCameraMetadata) const;
 #endif
+	EGoogleARCoreFunctionStatus AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage);
+
 	// Hit test
 	void ARLineTrace(const FVector2D& ScreenPosition, EGoogleARCoreLineTraceChannel TraceChannels, TArray<FARTraceResult>& OutHitResults);
 
@@ -106,7 +108,8 @@ public:
 	TSharedPtr<FARSystemBase, ESPMode::ThreadSafe> GetARSystem();
 	void SetARSystem(TSharedPtr<FARSystemBase, ESPMode::ThreadSafe> InARSystem);
 
-	EGoogleARCoreFunctionStatus AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage);
+	void* GetARSessionRawPointer();
+	void* GetGameThreadARFrameRawPointer();
 
 private:
 	// Android lifecycle events.

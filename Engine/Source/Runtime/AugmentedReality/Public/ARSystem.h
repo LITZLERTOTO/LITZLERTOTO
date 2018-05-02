@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Features/IModularFeature.h"
+#include "Delegates/Delegate.h"
 #include "XRTrackingSystemBase.h"
 #include "ARTypes.h"
 #include "ARSessionConfig.h"
@@ -12,6 +13,8 @@ class UARTrackedGeometry;
 class UARSessionConfig;
 struct FARTraceResult;
 
+DECLARE_MULTICAST_DELEGATE(FARSystemOnSessionStarted);
+DECLARE_MULTICAST_DELEGATE_OneParam(FARSystemOnAlignmentTransformUpdated, const FTransform&);
 
 /**
  * Implement IARSystemSupport for any platform that wants to be an Unreal Augmented Reality System. e.g. AppleARKit, GoogleARCore.
@@ -175,11 +178,17 @@ public:
 	UARPin* PinComponent( USceneComponent* ComponentToPin, const FARTraceResult& HitResult, const FName DebugName = NAME_None );
 	/** \see UARBlueprintLibrary::RemovePin() */
 	void RemovePin( UARPin* PinToRemove );
+
+	virtual void* GetARSessionRawPointer() = 0;
+	virtual void* GetGameThreadARFrameRawPointer() = 0;
 	
 public:
 	const FTransform& GetAlignmentTransform() const;
 	const UARSessionConfig& GetSessionConfig() const;
 	UARSessionConfig& AccessSessionConfig();
+
+	FARSystemOnSessionStarted OnARSessionStarted;
+	FARSystemOnAlignmentTransformUpdated OnAlignmentTransformUpdated;
 
 protected:
 	void SetAlignmentTransform_Internal(const FTransform& NewAlignmentTransform);

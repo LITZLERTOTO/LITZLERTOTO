@@ -577,6 +577,31 @@ bool FAppleARKitSystem::OnStartGameFrame(FWorldContext& WorldContext)
 	return true;
 }
 
+void* FAppleARKitSystem::GetARSessionRawPointer()
+{
+#if ARKIT_SUPPORT && __IPHONE_OS_VERSION_MAX_ALLOWED >= 110000
+	return static_cast<void*>(Session);
+#endif
+	ensureAlwaysMsgf(false, TEXT("FAppleARKitSystem::GetARSessionRawPointer is unimplemented on current platform."));
+	return nullptr;
+}
+
+void* FAppleARKitSystem::GetGameThreadARFrameRawPointer()
+{
+#if ARKIT_SUPPORT && __IPHONE_OS_VERSION_MAX_ALLOWED >= 110000
+	if(GameThreadFrame.IsValid())
+	{
+		return GameThreadFrame->NativeFrame;
+	}
+	else
+	{
+		return nullptr;
+	}
+#endif
+	ensureAlwaysMsgf(false, TEXT("FAppleARKitSystem::GetARGameThreadFrameRawPointer is unimplemented on current platform."));
+	return nullptr;
+}
+
 //bool FAppleARKitSystem::ARLineTraceFromScreenPoint(const FVector2D ScreenPosition, TArray<FARTraceResult>& OutHitResults)
 //{
 //	const bool bSuccess = HitTestAtScreenPosition(ScreenPosition, EAppleARKitHitTestResultType::ExistingPlaneUsingExtent, OutHitResults);
@@ -1028,7 +1053,8 @@ bool FAppleARKitSystem::Run(UARSessionConfig* SessionConfig)
 	
 	// Set running state
 	bIsRunning = true;
-	
+
+	OnARSessionStarted.Broadcast();
 	return true;
 }
 

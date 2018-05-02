@@ -3,12 +3,14 @@
 #include "ARSessionConfig.h"
 
 UARSessionConfig::UARSessionConfig()
-: SessionType(EARSessionType::World)
-, PlaneDetectionMode(EARPlaneDetectionMode::HorizontalPlaneDetection)
-, LightEstimationMode(EARLightEstimationMode::AmbientLightEstimate)
-, FrameSyncMode(EARFrameSyncMode::SyncTickWithoutCameraImage)
-, bEnableAutomaticCameraOverlay(true)
-, bEnableAutomaticCameraTracking(true)
+	: SessionType(EARSessionType::World)
+	, PlaneDetectionMode_DEPRECATED(EARPlaneDetectionMode::HorizontalPlaneDetection)
+	, bHorizontalPlaneDetection(true)
+	, bVerticalPlaneDetection(true)
+	, LightEstimationMode(EARLightEstimationMode::AmbientLightEstimate)
+	, FrameSyncMode(EARFrameSyncMode::SyncTickWithoutCameraImage)
+	, bEnableAutomaticCameraOverlay(true)
+	, bEnableAutomaticCameraTracking(true)
 {
 }
 EARSessionType UARSessionConfig::GetSessionType() const
@@ -18,7 +20,9 @@ EARSessionType UARSessionConfig::GetSessionType() const
 
 EARPlaneDetectionMode UARSessionConfig::GetPlaneDetectionMode() const
 {
-	return PlaneDetectionMode;
+	return static_cast<EARPlaneDetectionMode>(
+		(bHorizontalPlaneDetection ? static_cast<int32>(EARPlaneDetectionMode::HorizontalPlaneDetection) : 0) |
+		(bVerticalPlaneDetection ? static_cast<int32>(EARPlaneDetectionMode::VerticalPlaneDetection) : 0));
 }
 
 EARLightEstimationMode UARSessionConfig::GetLightEstimationMode() const

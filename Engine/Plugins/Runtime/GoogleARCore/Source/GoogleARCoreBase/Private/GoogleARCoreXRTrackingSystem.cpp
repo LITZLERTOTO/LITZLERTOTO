@@ -152,6 +152,24 @@ float FGoogleARCoreXRTrackingSystem::GetWorldToMetersScale() const
 	return 100.0f;
 }
 
+void* FGoogleARCoreXRTrackingSystem::GetARSessionRawPointer()
+{
+#if PLATFORM_ANDROID
+	return static_cast<void*>(FGoogleARCoreDevice::GetInstance()->GetARSessionRawPointer());
+#endif
+	ensureAlwaysMsgf(false, TEXT("FGoogleARCoreXRTrackingSystem::GetARSessionRawPointer is unimplemented on current platform."));
+	return nullptr;
+}
+
+void* FGoogleARCoreXRTrackingSystem::GetGameThreadARFrameRawPointer()
+{
+#if PLATFORM_ANDROID
+	return static_cast<void*>(FGoogleARCoreDevice::GetInstance()->GetGameThreadARFrameRawPointer());
+#endif
+	ensureAlwaysMsgf(false, TEXT("FGoogleARCoreXRTrackingSystem::GetARSessionRawPointer is unimplemented on current platform."));
+	return nullptr;
+}
+
 void FGoogleARCoreXRTrackingSystem::OnARSystemInitialized()
 {
 

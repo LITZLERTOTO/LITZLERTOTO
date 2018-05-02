@@ -46,6 +46,9 @@ public:
 	void OnBeginRendering_GameThread() override;
 	bool OnStartGameFrame(FWorldContext& WorldContext) override;
 	//~ IXRTrackingSystem
+
+	void* GetARSessionRawPointer() override;
+	void* GetGameThreadARFrameRawPointer() override;
 	
 	// @todo arkit : this is for the blueprint library only; try to get rid of this method
 	bool GetCurrentFrame(FAppleARKitFrame& OutCurrentFrame) const;

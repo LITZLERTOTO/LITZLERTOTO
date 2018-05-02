@@ -25,15 +25,18 @@ enum class EARSessionType : uint8
 	Face
 };
 
-UENUM(BlueprintType, Category = "AR AugmentedReality", meta = (Experimental))
+UENUM(BlueprintType, Category = "AR AugmentedReality", meta = (Experimental, Bitflags))
 enum class EARPlaneDetectionMode : uint8
 {
-	/** No Geometry Detection */
 	None = 0,
-
+	
 	/* Detect Horizontal Surfaces */
-	HorizontalPlaneDetection = 1
+	HorizontalPlaneDetection = 1,
+
+	/* Detects Vertical Surfaces */
+	VerticalPlaneDetection = 2
 };
+ENUM_CLASS_FLAGS(EARPlaneDetectionMode);
 
 UENUM(BlueprintType, Category = "AR AugmentedReality", meta = (Experimental))
 enum class EARLightEstimationMode : uint8
@@ -64,7 +67,7 @@ class AUGMENTEDREALITY_API UARSessionConfig : public UDataAsset
 	GENERATED_BODY()
 
 public:
-	
+
 	UARSessionConfig();
 	
 public:
@@ -93,8 +96,16 @@ protected:
 	EARSessionType SessionType;
 
 	/** @see EARPlaneDetectionMode */
+	UPROPERTY()
+	EARPlaneDetectionMode PlaneDetectionMode_DEPRECATED;
+	
+	/** Should we detect flat horizontal surfaces: e.g. table tops, windows sills */
 	UPROPERTY(EditAnywhere, Category = "AR Settings")
-	EARPlaneDetectionMode PlaneDetectionMode;
+	bool bHorizontalPlaneDetection;
+	
+	/** Should we detect flat vertical surfaces: e.g. paintings, monitors, book cases */
+	UPROPERTY(EditAnywhere, Category = "AR Settings")
+	bool bVerticalPlaneDetection;
 
 	/** @see EARLightEstimationMode */
 	UPROPERTY(EditAnywhere, Category = "AR Settings")
