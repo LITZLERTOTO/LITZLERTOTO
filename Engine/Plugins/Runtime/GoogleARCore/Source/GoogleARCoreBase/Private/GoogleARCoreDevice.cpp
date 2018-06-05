@@ -130,11 +130,15 @@ void FGoogleARCoreDevice::StartARCoreSessionRequest(UARSessionConfig* SessionCon
 		if (SessionConfig == AccessSessionConfig())
 		{
 			UE_LOG(LogGoogleARCore, Warning, TEXT("ARCore session is already running with the requested ARCore config. Request aborted."));
-			bStartSessionRequested = false;
-			return;
+		}
+		else 
+		{
+			UE_LOG(LogGoogleARCore, Log, TEXT("ARCore session is already running, set it to use the new session config."));
+			EGoogleARCoreAPIStatus Status = ARCoreSession->ConfigSession(*SessionConfig);
+			ensureMsgf(Status == EGoogleARCoreAPIStatus::AR_SUCCESS, TEXT("Failed to set ARCore session to new configuration while it is running."));
 		}
 
-		PauseARCoreSession();
+		return;
 	}
 
 	if (bStartSessionRequested)
@@ -467,7 +471,7 @@ FTextureRHIRef FGoogleARCoreDevice::GetPassthroughCameraTexture()
 
 FMatrix FGoogleARCoreDevice::GetPassthroughCameraProjectionMatrix(FIntPoint ViewRectSize) const
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return FMatrix::Identity;
 	}
@@ -476,7 +480,7 @@ FMatrix FGoogleARCoreDevice::GetPassthroughCameraProjectionMatrix(FIntPoint View
 
 void FGoogleARCoreDevice::GetPassthroughCameraImageUVs(const TArray<float>& InUvs, TArray<float>& OutUVs) const
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return;
 	}
@@ -485,16 +489,21 @@ void FGoogleARCoreDevice::GetPassthroughCameraImageUVs(const TArray<float>& InUv
 
 EGoogleARCoreTrackingState FGoogleARCoreDevice::GetTrackingState() const
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return EGoogleARCoreTrackingState::StoppedTracking;
 	}
+	else if (!bIsARCoreSessionRunning)
+	{
+		return EGoogleARCoreTrackingState::NotTracking;
+	}
+
 	return ARCoreSession->GetLatestFrame()->GetCameraTrackingState();
 }
 
 FTransform FGoogleARCoreDevice::GetLatestPose() const
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return FTransform::Identity;
 	}
@@ -503,9 +512,9 @@ FTransform FGoogleARCoreDevice::GetLatestPose() const
 
 EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetLatestPointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud) const
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
-		return EGoogleARCoreFunctionStatus::SessionPaused;
+		return EGoogleARCoreFunctionStatus::NotAvailable;
 	}
 
 	return ToARCoreFunctionStatus(ARCoreSession->GetLatestFrame()->GetPointCloud(OutLatestPointCloud));
@@ -513,9 +522,9 @@ EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetLatestPointCloud(UGoogleARCo
 
 EGoogleARCoreFunctionStatus FGoogleARCoreDevice::AcquireLatestPointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud) const
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
-		return EGoogleARCoreFunctionStatus::SessionPaused;
+		return EGoogleARCoreFunctionStatus::NotAvailable;
 	}
 
 	return ToARCoreFunctionStatus(ARCoreSession->GetLatestFrame()->AcquirePointCloud(OutLatestPointCloud));
@@ -524,17 +533,28 @@ EGoogleARCoreFunctionStatus FGoogleARCoreDevice::AcquireLatestPointCloud(UGoogle
 #if PLATFORM_ANDROID
 EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetLatestCameraMetadata(const ACameraMetadata*& OutCameraMetadata) const
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
-		return EGoogleARCoreFunctionStatus::SessionPaused;
+		return EGoogleARCoreFunctionStatus::NotAvailable;
 	}
 
 	return ToARCoreFunctionStatus(ARCoreSession->GetLatestFrame()->GetCameraMetadata(OutCameraMetadata));
 }
 #endif
+
+EGoogleARCoreFunctionStatus FGoogleARCoreDevice::AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage)
+{
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
+	{
+		return EGoogleARCoreFunctionStatus::NotAvailable;
+	}
+
+	return ToARCoreFunctionStatus(ARCoreSession->GetLatestFrame()->AcquireCameraImage(OutLatestCameraImage));
+}
+
 FGoogleARCoreLightEstimate FGoogleARCoreDevice::GetLatestLightEstimate() const
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return FGoogleARCoreLightEstimate();
 	}
@@ -544,7 +564,7 @@ FGoogleARCoreLightEstimate FGoogleARCoreDevice::GetLatestLightEstimate() const
 
 void FGoogleARCoreDevice::ARLineTrace(const FVector2D& ScreenPosition, EGoogleARCoreLineTraceChannel TraceChannels, TArray<FARTraceResult>& OutHitResults)
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return;
 	}
@@ -569,7 +589,7 @@ EGoogleARCoreFunctionStatus FGoogleARCoreDevice::CreateARPin(const FTransform& P
 
 void FGoogleARCoreDevice::RemoveARPin(UARPin* ARAnchorObject)
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid())
 	{
 		return;
 	}
@@ -579,7 +599,7 @@ void FGoogleARCoreDevice::RemoveARPin(UARPin* ARAnchorObject)
 
 void FGoogleARCoreDevice::GetAllARPins(TArray<UARPin*>& ARCoreAnchorList)
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid())
 	{
 		return;
 	}
@@ -588,7 +608,7 @@ void FGoogleARCoreDevice::GetAllARPins(TArray<UARPin*>& ARCoreAnchorList)
 
 void FGoogleARCoreDevice::GetUpdatedARPins(TArray<UARPin*>& ARCoreAnchorList)
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return;
 	}
@@ -647,12 +667,23 @@ UARSessionConfig* FGoogleARCoreDevice::AccessSessionConfig() const
 		: nullptr;
 }
 
-EGoogleARCoreFunctionStatus FGoogleARCoreDevice::AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage)
+
+EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetCameraImageIntrinsics(UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics)
 {
-	if (!bIsARCoreSessionRunning)
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
-		return EGoogleARCoreFunctionStatus::SessionPaused;
+		return EGoogleARCoreFunctionStatus::NotAvailable;
 	}
 
-	return ToARCoreFunctionStatus(ARCoreSession->AcquireCameraImage(OutLatestCameraImage));
+	return ToARCoreFunctionStatus(ARCoreSession->GetLatestFrame()->GetCameraImageIntrinsics(OutCameraIntrinsics));
+}
+
+EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetCameraTextureIntrinsics(UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics)
+{
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
+	{
+		return EGoogleARCoreFunctionStatus::NotAvailable;
+	}
+
+	return ToARCoreFunctionStatus(ARCoreSession->GetLatestFrame()->GetCameraTextureIntrinsics(OutCameraIntrinsics));
 }

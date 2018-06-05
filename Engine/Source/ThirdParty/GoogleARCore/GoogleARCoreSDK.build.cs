@@ -21,10 +21,12 @@ public class GoogleARCoreSDK : ModuleRules
 		{
 			string ARCoreSDKArmLibPath = ARCoreSDKBaseLibPath + "armeabi-v7a/";
 			string ARCoreSDKArm64LibPath = ARCoreSDKBaseLibPath + "arm64-v8a/";
+			string ARCoreSDKx86LibPath = ARCoreSDKBaseLibPath + "x86/";
 
 			// toolchain will filter properly
 			PublicLibraryPaths.Add(ARCoreSDKArmLibPath);
 			PublicLibraryPaths.Add(ARCoreSDKArm64LibPath);
+			PublicLibraryPaths.Add(ARCoreSDKx86LibPath);
 
 			PublicAdditionalLibraries.Add("arcore_sdk_c");
 		}

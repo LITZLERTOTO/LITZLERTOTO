@@ -358,3 +358,14 @@ EGoogleARCoreFunctionStatus UGoogleARCoreFrameFunctionLibrary::AcquireCameraImag
 {
 	return FGoogleARCoreDevice::GetInstance()->AcquireCameraImage(OutLatestCameraImage);
 }
+
+EGoogleARCoreFunctionStatus UGoogleARCoreFrameFunctionLibrary::GetCameraImageIntrinsics(UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics)
+{
+	return FGoogleARCoreDevice::GetInstance()->GetCameraImageIntrinsics(OutCameraIntrinsics);
+}
+
+EGoogleARCoreFunctionStatus UGoogleARCoreFrameFunctionLibrary::GetCameraTextureIntrinsics(UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics)
+{
+	return FGoogleARCoreDevice::GetInstance()->GetCameraTextureIntrinsics(OutCameraIntrinsics);
+}
+

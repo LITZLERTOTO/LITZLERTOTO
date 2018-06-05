@@ -72,7 +72,7 @@ public:
 	template< class T >
 	void GetUpdatedTrackables(TArray<T*>& OutARCoreTrackableList)
 	{
-		if (!bIsARCoreSessionRunning)
+		if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 		{
 			return;
 		}
@@ -82,12 +82,16 @@ public:
 	template< class T >
 	void GetAllTrackables(TArray<T*>& OutARCoreTrackableList)
 	{
-		if (!bIsARCoreSessionRunning)
+		if (!ARCoreSession.IsValid())
 		{
 			return;
 		}
 		ARCoreSession->GetAllTrackables<T>(OutARCoreTrackableList);
 	}
+
+	// Camera Intrinsics
+	EGoogleARCoreFunctionStatus GetCameraImageIntrinsics(UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics);
+	EGoogleARCoreFunctionStatus GetCameraTextureIntrinsics(UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics);
 
 	void RunOnGameThread(TFunction<void()> Func)
 	{

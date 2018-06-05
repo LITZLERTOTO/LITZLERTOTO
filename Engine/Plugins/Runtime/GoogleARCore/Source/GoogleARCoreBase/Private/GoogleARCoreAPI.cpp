@@ -11,7 +11,6 @@
 #if PLATFORM_ANDROID
 #include "Android/AndroidApplication.h"
 #include "Android/AndroidJNI.h"
-#include "media/NdkImage.h"
 #include "arcore_c_api.h"
 #endif
 
@@ -210,22 +209,8 @@ ArSession* FGoogleARCoreSession::GetHandle()
 bool FGoogleARCoreSession::IsConfigSupported(const UARSessionConfig& Config)
 {
 #if PLATFORM_ANDROID
-	if (SessionHandle == nullptr)
-	{
-		return false;
-	}
-
-	ArConfig* NewConfigHandle = nullptr;
-	ArConfig_create(SessionHandle, &NewConfigHandle);
-
-	ArConfig_setLightEstimationMode(SessionHandle, NewConfigHandle, static_cast<ArLightEstimationMode>(Config.GetLightEstimationMode()));
-	ArConfig_setPlaneFindingMode(SessionHandle, NewConfigHandle, static_cast<ArPlaneFindingMode>(Config.GetPlaneDetectionMode()));
-	ArConfig_setUpdateMode(SessionHandle, NewConfigHandle, static_cast<ArUpdateMode>(Config.GetFrameSyncMode()));
-
-	ArStatus Status = ArSession_checkSupported(SessionHandle, NewConfigHandle);
-	ArConfig_destroy(NewConfigHandle);
-
-	return Status == ArStatus::AR_SUCCESS;
+	// Always return true for now since all configuration is supported on all ARCore supported phones.
+	return true;
 #endif
 	return false;
 }
@@ -327,11 +312,25 @@ EGoogleARCoreAPIStatus FGoogleARCoreSession::Pause()
 	}
 
 	PauseStatue = ToARCoreAPIStatus(ArSession_pause(SessionHandle));
+
+	// Update all tracked geometry tracking state.
+	TArray<UARTrackedGeometry*> AllTrackedGeometries;
+	GetAllTrackables<UARTrackedGeometry>(AllTrackedGeometries);
+	for (UARTrackedGeometry* Trackable : AllTrackedGeometries)
+	{
+		if (Trackable->GetTrackingState() == EARTrackingState::Tracking)
+		{
+			Trackable->UpdateTrackingState(EARTrackingState::NotTracking);
+		}
+	}
 #endif
 
 	for (UARPin* Anchor : UObjectManager->AllAnchors)
 	{
-		Anchor->OnTrackingStateChanged(EARTrackingState::NotTracking);
+		if (Anchor->GetTrackingState() == EARTrackingState::Tracking)
+		{
+			Anchor->OnTrackingStateChanged(EARTrackingState::NotTracking);
+		}
 	}
 
 	return PauseStatue;
@@ -570,7 +569,7 @@ void FGoogleARCoreFrame::Update(float WorldToMeterScale)
 		if (Session->GetUObjectManager()->TrackableHandleMap.Contains(TrackableHandle))
 		{
 			TWeakObjectPtr<UARTrackedGeometry> UETrackableObject = Session->GetUObjectManager()->TrackableHandleMap[TrackableHandle];
-			if (UETrackableObject.IsValid() && UETrackableObject->GetTrackingState() != EARTrackingState::StoppedTracking)
+			if (UETrackableObject.IsValid())
 			{
 				// Updated the cached tracked geometry when it is valid.
 				FGoogleARCoreTrackableResource* TrackableResource = reinterpret_cast<FGoogleARCoreTrackableResource*>(UETrackableObject->GetNativeResource());
@@ -639,6 +638,56 @@ int64 FGoogleARCoreFrame::GetCameraTimestamp() const
 EGoogleARCoreTrackingState FGoogleARCoreFrame::GetCameraTrackingState() const
 {
 	return LatestCameraTrackingState;
+}
+
+EGoogleARCoreAPIStatus FGoogleARCoreFrame::GetCameraImageIntrinsics(
+	UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics) const
+{
+	EGoogleARCoreAPIStatus ApiStatus = EGoogleARCoreAPIStatus::AR_SUCCESS;
+
+#if PLATFORM_ANDROID
+
+	OutCameraIntrinsics = NewObject<UGoogleARCoreCameraIntrinsics>();
+
+	ArCameraIntrinsics_create(
+		SessionHandle,
+		&OutCameraIntrinsics->NativeCameraIntrinsics);
+
+	ArCamera_getImageIntrinsics(
+		SessionHandle,
+		CameraHandle,
+		OutCameraIntrinsics->NativeCameraIntrinsics);
+
+	OutCameraIntrinsics->Session = Session->AsShared();
+
+#endif
+
+	return ApiStatus;
+}
+
+EGoogleARCoreAPIStatus FGoogleARCoreFrame::GetCameraTextureIntrinsics(
+	UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics) const
+{
+	EGoogleARCoreAPIStatus ApiStatus = EGoogleARCoreAPIStatus::AR_SUCCESS;
+
+#if PLATFORM_ANDROID
+
+	OutCameraIntrinsics = NewObject<UGoogleARCoreCameraIntrinsics>();
+
+	ArCameraIntrinsics_create(
+		SessionHandle,
+		&OutCameraIntrinsics->NativeCameraIntrinsics);
+
+	ArCamera_getTextureIntrinsics(
+		SessionHandle,
+		CameraHandle,
+		OutCameraIntrinsics->NativeCameraIntrinsics);
+
+	OutCameraIntrinsics->Session = Session->AsShared();
+
+#endif
+
+	return ApiStatus;
 }
 
 void FGoogleARCoreFrame::GetUpdatedAnchors(TArray<UARPin*>& OutUpdatedAnchors) const
@@ -886,6 +935,35 @@ EGoogleARCoreAPIStatus FGoogleARCoreFrame::AcquirePointCloud(UGoogleARCorePointC
 	return AcquirePointCloudStatus;
 }
 
+EGoogleARCoreAPIStatus FGoogleARCoreFrame::AcquireCameraImage(UGoogleARCoreCameraImage *&OutCameraImage) const
+{
+	EGoogleARCoreAPIStatus ApiStatus = EGoogleARCoreAPIStatus::AR_SUCCESS;
+#if PLATFORM_ANDROID
+	if (SessionHandle == nullptr)
+	{
+		return EGoogleARCoreAPIStatus::AR_ERROR_SESSION_PAUSED;
+	}
+
+	ArImage *OutImage = nullptr;
+	ApiStatus = ToARCoreAPIStatus(
+		ArFrame_acquireCameraImage(
+			const_cast<ArSession*>(SessionHandle), FrameHandle, &OutImage));
+
+	if (ApiStatus == EGoogleARCoreAPIStatus::AR_SUCCESS)
+	{
+		OutCameraImage = NewObject<UGoogleARCoreCameraImage>();
+		OutCameraImage->ArImage = OutImage;
+		ArImage_getNdkImage(OutImage, &OutCameraImage->NdkImage);
+	}
+	else
+	{
+		UE_LOG(LogGoogleARCoreAPI, Error, TEXT("AcquireCameraImage failed!"));
+	}
+#endif
+
+	return ApiStatus;
+}
+
 #if PLATFORM_ANDROID
 EGoogleARCoreAPIStatus FGoogleARCoreFrame::GetCameraMetadata(const ACameraMetadata*& OutCameraMetadata) const
 {
@@ -977,7 +1055,8 @@ void FGoogleARCoreTrackedPlaneResource::UpdateGeometryData()
 	ArPlane_getExtentZ(SessionPtr->GetHandle(), GetPlaneHandle(), &ARCorePlaneExtentZ);
 
 	// Convert OpenGL axis to Unreal axis.
-	Extent = FVector(-ARCorePlaneExtentZ, ARCorePlaneExtentX, 0) * SessionPtr->GetWorldToMeterScale();
+	// Unreal TrackedPlaneGeometry extent is the length from  the plane center to edge.
+	Extent = FVector(-ARCorePlaneExtentZ / 2.0f, ARCorePlaneExtentX / 2.0f, 0) * SessionPtr->GetWorldToMeterScale();
 
 	// Update Boundary Polygon
 	int PolygonSize = 0;
@@ -1224,40 +1303,6 @@ void UGoogleARCoreUObjectManager::DumpTrackableHandleMap(const ArSession* Sessio
 	}
 }
 #endif
-
-EGoogleARCoreAPIStatus FGoogleARCoreSession::AcquireCameraImage(UGoogleARCoreCameraImage *&OutCameraImage)
-{
-	EGoogleARCoreAPIStatus ApiStatus = EGoogleARCoreAPIStatus::AR_SUCCESS;
-#if PLATFORM_ANDROID
-	if (SessionHandle == nullptr)
-	{
-		return EGoogleARCoreAPIStatus::AR_ERROR_SESSION_PAUSED;
-	}
-
-	if (LatestFrame == nullptr || LatestFrame->FrameHandle == nullptr)
-	{
-		return EGoogleARCoreAPIStatus::AR_ERROR_NOT_YET_AVAILABLE;
-	}
-
-	ArImage *OutImage = nullptr;
-	ApiStatus = ToARCoreAPIStatus(
-		ArFrame_acquireCameraImage(
-			SessionHandle, LatestFrame->FrameHandle, &OutImage));
-
-	if (ApiStatus == EGoogleARCoreAPIStatus::AR_SUCCESS)
-	{
-		OutCameraImage = NewObject<UGoogleARCoreCameraImage>();
-		OutCameraImage->ArImage = OutImage;
-		ArImage_getNdkImage(OutImage, &OutCameraImage->NdkImage);
-	}
-	else
-	{
-		UE_LOG(LogGoogleARCoreAPI, Error, TEXT("AcquireCameraImage failed!"));
-	}
-#endif
-
-	return ApiStatus;
-}
 
 void* FGoogleARCoreSession::GetLatestFrameRawPointer()
 {

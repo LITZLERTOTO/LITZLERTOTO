@@ -46,11 +46,8 @@ void FARSystemBase::StartARSession(UARSessionConfig* InSessionConfig)
 	const bool bIsARApp = GetDefault<UGeneralProjectSettings>()->bSupportAR;
 	if (ensureAlwaysMsgf(bIsARApp, NotARApp_Warning))
 	{
-		if (GetARSessionStatus().Status != EARSessionStatus::Running)
-		{
-			OnStartARSession(InSessionConfig);
-			ARSettings = InSessionConfig;
-		}
+		OnStartARSession(InSessionConfig);
+		ARSettings = InSessionConfig;
 	}
 	else
 	{

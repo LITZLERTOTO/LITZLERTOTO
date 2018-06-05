@@ -82,6 +82,7 @@ bool FGoogleARCoreXRTrackingSystem::EnumerateTrackedDevices(TArray<int32>& OutDe
 bool FGoogleARCoreXRTrackingSystem::OnStartGameFrame(FWorldContext& WorldContext)
 {
 	FTransform CurrentPose;
+	bHasValidPose = false;
 	if (ARCoreDeviceInstance->GetIsARCoreSessionRunning())
 	{
 		if (ARCoreDeviceInstance->GetTrackingState() == EGoogleARCoreTrackingState::Tracking)
@@ -90,10 +91,6 @@ bool FGoogleARCoreXRTrackingSystem::OnStartGameFrame(FWorldContext& WorldContext
 			CurrentPose *= GetAlignmentTransform();
 			bHasValidPose = true;
 			CachedTrackingToWorld = ComputeTrackingToWorldTransform(WorldContext);
-		}
-		else
-		{
-			bHasValidPose = false;
 		}
 
 		if (bHasValidPose)
@@ -115,7 +112,6 @@ bool FGoogleARCoreXRTrackingSystem::OnStartGameFrame(FWorldContext& WorldContext
 		{
 			LightEstimate = nullptr;
 		}
-
 	}
 
 	return true;

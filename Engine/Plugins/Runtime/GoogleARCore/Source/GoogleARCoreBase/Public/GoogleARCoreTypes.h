@@ -90,7 +90,7 @@ enum class EGoogleARCoreFunctionStatus : uint8
 	NotTracking,
 	/** Function failed due to the requested resource is exhausted. */
 	ResourceExhausted,
-	/** Function failed due to the requested resource isn't available yet. */
+	/** Function failed due to ARCore session hasn't started or the requested resource isn't available yet. */
 	NotAvailable,
 	/** Function failed due to the function augment has invalid type. */
 	InvalidType,

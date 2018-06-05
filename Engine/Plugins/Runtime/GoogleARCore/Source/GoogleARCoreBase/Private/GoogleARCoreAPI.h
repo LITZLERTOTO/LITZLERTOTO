@@ -8,6 +8,7 @@
 #include "GoogleARCoreSessionConfig.h"
 #include "GoogleARCoreCameraImageBlitter.h"
 #include "GoogleARCoreAugmentedImage.h"
+#include "GoogleARCoreCameraIntrinsics.h"
 #include "ARSessionConfig.h"
 
 #if PLATFORM_ANDROID
@@ -194,7 +195,6 @@ public:
 
 	void GetAllAnchors(TArray<UARPin*>& OutAnchors) const;
 	template< class T > void GetAllTrackables(TArray<T*>& OutARCoreTrackableList);
-	EGoogleARCoreAPIStatus AcquireCameraImage(UGoogleARCoreCameraImage *&OutCameraImage);
 
 	void* GetLatestFrameRawPointer();
 
@@ -244,6 +244,12 @@ public:
 	FGoogleARCoreLightEstimate GetLightEstimate() const;
 	EGoogleARCoreAPIStatus GetPointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud) const;
 	EGoogleARCoreAPIStatus AcquirePointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud) const;
+	EGoogleARCoreAPIStatus AcquireCameraImage(UGoogleARCoreCameraImage *&OutCameraImage) const;
+	EGoogleARCoreAPIStatus GetCameraImageIntrinsics(
+		UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics) const;
+	EGoogleARCoreAPIStatus GetCameraTextureIntrinsics(
+		UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics) const;
+
 #if PLATFORM_ANDROID
 	EGoogleARCoreAPIStatus GetCameraMetadata(const ACameraMetadata*& OutCameraMetadata) const;
 	ArFrame* GetHandle() { return FrameHandle; };
@@ -406,7 +412,6 @@ T* UGoogleARCoreUObjectManager::GetTrackableFromHandle(ArTrackable* TrackableHan
 
 		// Update the tracked geometry data using the native resource
 		TrackableResource->UpdateGeometryData();
-		ensure(TrackableResource->GetTrackingState() != EARTrackingState::StoppedTracking);
 
 		TrackableHandleMap.Add(TrackableHandle, TWeakObjectPtr<UARTrackedGeometry>(NewTrackableObject));
 	}

@@ -194,8 +194,15 @@ void UGoogleARCoreAugmentedImageDatabase::Serialize(FArchive& Ar)
 							Tex,
 							PNGFilename))
 					{
+						// "|" is used as a delimeter in the image
+						// list, and there doesn't seem to be any way
+						// to escape them, so they will be replaced
+						// with underscores.
+						FString TmpName =
+							Entries[i].Name.ToString().Replace(TEXT("|"), TEXT("_"));
+
 						ImageListFileContents +=
-							Tex->GetName() +
+							TmpName +
 							FString("|") +
 							PNGFilename;
 

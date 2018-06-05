@@ -7,7 +7,7 @@
 #if PLATFORM_ANDROID
 #include "Android/AndroidApplication.h"
 #include "Android/AndroidJNI.h"
-#include "media/NdkImage.h"
+#include "Ndk/NdkImageAPI.h"
 #endif
 
 UGoogleARCoreCameraImage::~UGoogleARCoreCameraImage()
@@ -33,7 +33,7 @@ int32 UGoogleARCoreCameraImage::GetWidth() const
 #if PLATFORM_ANDROID
 	if (NdkImage)
 	{
-		AImage_getWidth(NdkImage, &Width);
+		AImage_getWidth_dynamic(NdkImage, &Width);
 	}
 #endif
 	return Width;
@@ -45,7 +45,7 @@ int32 UGoogleARCoreCameraImage::GetHeight() const
 #if PLATFORM_ANDROID
 	if (NdkImage)
 	{
-		AImage_getHeight(NdkImage, &Height);
+		AImage_getHeight_dynamic(NdkImage, &Height);
 	}
 #endif
 	return Height;
@@ -58,7 +58,7 @@ int32 UGoogleARCoreCameraImage::GetPlaneCount() const
 #if PLATFORM_ANDROID
 	if (NdkImage)
 	{
-		AImage_getNumberOfPlanes(NdkImage, &PlaneCount);
+		AImage_getNumberOfPlanes_dynamic(NdkImage, &PlaneCount);
 	}
 #endif
 	return PlaneCount;
@@ -70,9 +70,9 @@ uint8 *UGoogleARCoreCameraImage::GetPlaneData(
 {
 	uint8_t *PlaneData = nullptr;
 #if PLATFORM_ANDROID
-	AImage_getPlanePixelStride(NdkImage, Plane, &PixelStride);
-	AImage_getPlaneRowStride(NdkImage, Plane, &RowStride);
-	AImage_getPlaneData(
+	AImage_getPlanePixelStride_dynamic(NdkImage, Plane, &PixelStride);
+	AImage_getPlaneRowStride_dynamic(NdkImage, Plane, &RowStride);
+	AImage_getPlaneData_dynamic(
 		NdkImage, Plane,
 		&PlaneData, &DataLength);
 #endif
