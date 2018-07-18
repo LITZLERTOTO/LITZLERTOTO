@@ -41,6 +41,8 @@ public:
 	void* GetARSessionRawPointer() override;
 	void* GetGameThreadARFrameRawPointer() override;
 
+	UGoogleARCoreEventManager* GetEventManager();
+
 protected:
 	// IARSystemSupport
 	virtual void OnARSystemInitialized() override;
@@ -63,9 +65,8 @@ protected:
 	virtual bool OnAddManualEnvironmentCaptureProbe(FVector Location, FVector Extent) { return false; }
 	virtual TSharedPtr<FARGetCandidateObjectAsyncTask, ESPMode::ThreadSafe> OnGetCandidateObject(FVector Location, FVector Extent) const { return TSharedPtr<FARGetCandidateObjectAsyncTask, ESPMode::ThreadSafe>(); }
 	virtual TSharedPtr<FARSaveWorldAsyncTask, ESPMode::ThreadSafe> OnSaveWorld() const { return TSharedPtr<FARSaveWorldAsyncTask, ESPMode::ThreadSafe>(); }
-// @todo -- support this properly
+	// @todo -- support this properly
 	virtual EARWorldMappingState OnGetWorldMappingStatus() const { return EARWorldMappingState::StillMappingNotRelocalizable; }
-	//~IARSystemSupport
 
 private:
 	//~ FGCObject
@@ -87,6 +88,7 @@ private:
 	TSharedPtr<class ISceneViewExtension, ESPMode::ThreadSafe> ViewExtension;
 
 	UARBasicLightEstimate* LightEstimate;
+	UGoogleARCoreEventManager* EventManager;
 };
 
 DEFINE_LOG_CATEGORY_STATIC(LogGoogleARCoreTrackingSystem, Log, All);
