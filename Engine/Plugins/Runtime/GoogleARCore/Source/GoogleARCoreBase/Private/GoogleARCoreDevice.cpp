@@ -187,6 +187,18 @@ bool FGoogleARCoreDevice::GetARCameraConfig(FGoogleARCoreCameraConfig& OutCurren
 	}
 }
 
+int FGoogleARCoreDevice::AddRuntimeAugmentedImage(UGoogleARCoreAugmentedImageDatabase* TargetImageDatabase, const TArray<uint8>& ImageGrayscalePixels,
+	int ImageWidth, int ImageHeight, FString ImageName, float ImageWidthInMeter)
+{
+	if (!ARCoreSession.IsValid())
+	{
+		UE_LOG(LogGoogleARCore, Warning, TEXT("Failed to add runtime augmented image: No valid session!"));
+		return -1;
+	}
+
+	return ARCoreSession->AddRuntimeAugmentedImage(TargetImageDatabase, ImageGrayscalePixels, ImageWidth, ImageHeight, ImageName, ImageWidthInMeter);
+}
+
 bool FGoogleARCoreDevice::GetStartSessionRequestFinished()
 {
 	return !bStartSessionRequested;
@@ -574,6 +586,11 @@ EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetLatestCameraMetadata(const A
 	return ToARCoreFunctionStatus(ARCoreSession->GetLatestFrame()->GetCameraMetadata(OutCameraMetadata));
 }
 #endif
+
+UTexture* FGoogleARCoreDevice::GetCameraTexture()
+{
+	return CameraBlitter.GetLastCameraImageTexture();
+}
 
 EGoogleARCoreFunctionStatus FGoogleARCoreDevice::AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage)
 {

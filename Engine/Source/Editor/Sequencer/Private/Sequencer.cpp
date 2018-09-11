@@ -5828,6 +5828,16 @@ void FSequencer::PasteCopiedTracks()
 				// Copy the name of the original spawnable too.
 				Spawnable->SetName(CopyableBinding->Spawnable.GetName());
 
+				// Clear the transient flags on the copyable binding before assigning to the new spawnable
+				for (auto Track : NewBinding.GetTracks())
+				{
+					Track->ClearFlags(RF_Transient);
+					for (auto Section : Track->GetAllSections())
+					{
+						Section->ClearFlags(RF_Transient);
+					}
+				}
+
 				// Replace the auto-generated binding with our deserialized bindings (which has our tracks)
 				MovieScene->ReplaceBinding(NewGuid, NewBinding);
 
@@ -6742,7 +6752,11 @@ void FSequencer::StepToNextShot()
 	UMovieSceneSequence* Sequence = RootTemplateInstance.GetSequence(OuterSequenceID);
 
 	FFrameTime StartTime = FFrameTime(0) * RootToLocalTransform.Inverse();
-	FFrameTime CurrentTime = StartTime * RootTemplateInstance.GetHierarchy().FindSubData(OuterSequenceID)->RootToSequenceTransform;
+	FFrameTime CurrentTime = StartTime;
+	if (FMovieSceneSubSequenceData* SubSequenceData = RootTemplateInstance.GetHierarchy().FindSubData(OuterSequenceID))
+	{
+		CurrentTime = StartTime * SubSequenceData->RootToSequenceTransform;
+	}
 
 	UMovieSceneSubSection* NextShot = Cast<UMovieSceneSubSection>(FindNextOrPreviousShot(Sequence, CurrentTime.FloorToFrame(), true));
 	if (!NextShot)
@@ -6770,7 +6784,11 @@ void FSequencer::StepToPreviousShot()
 	UMovieSceneSequence* Sequence = RootTemplateInstance.GetSequence(OuterSequenceID);
 
 	FFrameTime StartTime = FFrameTime(0) * RootToLocalTransform.Inverse();
-	FFrameTime CurrentTime = StartTime * RootTemplateInstance.GetHierarchy().FindSubData(OuterSequenceID)->RootToSequenceTransform;
+	FFrameTime CurrentTime = StartTime;
+	if (FMovieSceneSubSequenceData* SubSequenceData = RootTemplateInstance.GetHierarchy().FindSubData(OuterSequenceID))
+	{
+		CurrentTime = StartTime * SubSequenceData->RootToSequenceTransform;
+	}
 
 	UMovieSceneSubSection* PreviousShot = Cast<UMovieSceneSubSection>(FindNextOrPreviousShot(Sequence, CurrentTime.FloorToFrame(), false));
 	if (!PreviousShot)

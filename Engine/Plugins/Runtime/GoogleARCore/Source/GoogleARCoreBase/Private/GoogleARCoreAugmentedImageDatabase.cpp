@@ -8,8 +8,12 @@
 
 #include "Kismet/GameplayStatics.h"
 #include "Misc/FileHelper.h"
+#include "Misc/AssertionMacros.h"
 #include "HAL/PlatformFilemanager.h"
 #include "HAL/FileManager.h"
+#include "GenericPlatform/GenericPlatformFile.h"
+#include "Containers/StringConv.h"
+#include "RenderUtils.h"
 
 #include "png.h"
 
@@ -123,6 +127,24 @@ namespace
 
 		return Ret;
 	}
+
+#if PLATFORM_LINUX || PLATFORM_MAC
+	bool PlatformSetExecutable(const TCHAR* Filename, bool bIsExecutable)
+	{
+		struct stat FileInfo;
+		FTCHARToUTF8 FilenameUtf8(Filename);
+		bool bSuccess = false;
+		// Set executable permission bit
+		if (stat(FilenameUtf8.Get(), &FileInfo) == 0)
+		{
+			mode_t ExeFlags = S_IXUSR | S_IXGRP | S_IXOTH;
+			FileInfo.st_mode = bIsExecutable ? (FileInfo.st_mode | ExeFlags) : (FileInfo.st_mode & ~ExeFlags);
+			bSuccess = chmod(FilenameUtf8.Get(), FileInfo.st_mode) == 0;
+		}
+		return bSuccess;
+	}
+#endif
+
 }
 
 // Renable warning "interaction between '_setjmp' and C++ object destruction is non-portable"
@@ -132,6 +154,72 @@ namespace
 #endif
 
 #endif
+
+int UGoogleARCoreAugmentedImageDatabase::AddRuntimeAugmentedImageFromTexture(UTexture2D* ImageTexture, FName ImageName, float ImageWidthInMeter /*= 0*/)
+{
+	EPixelFormat PixelFormat = ImageTexture->GetPixelFormat();
+
+	if (PixelFormat == EPixelFormat::PF_B8G8R8A8 || PixelFormat == EPixelFormat::PF_G8)
+	{
+		ensure(ImageTexture->GetNumMips() > 0);
+		FTexture2DMipMap* Mip0 = &ImageTexture->PlatformData->Mips[0];
+		FByteBulkData* RawImageData = &Mip0->BulkData;
+
+		int ImageWidth = ImageTexture->GetSizeX();
+		int ImageHeight = ImageTexture->GetSizeY();
+
+		TArray<uint8> GrayscaleBuffer;
+		int PixelNum = ImageWidth * ImageHeight;
+		uint8* RawBytes = static_cast<uint8*>(RawImageData->Lock(LOCK_READ_ONLY));
+		if (PixelFormat == EPixelFormat::PF_B8G8R8A8)
+		{
+			GrayscaleBuffer.SetNumUninitialized(PixelNum);
+			ensureMsgf(RawImageData->GetBulkDataSize() == ImageWidth * ImageHeight * 4,
+				TEXT("Unsupported texture data in UGoogleARCoreAugmentedImageDatabase::AddRuntimeAugmentedImage"));
+
+			for (int i = 0; i < PixelNum; i++)
+			{
+				uint8 R = RawBytes[i * 4 + 2];
+				uint8 G = RawBytes[i * 4 + 1];
+				uint8 B = RawBytes[i * 4];
+				GrayscaleBuffer[i] = 0.2126 * R + 0.7152 * G + 0.0722 * B;
+			}
+		}
+		else if(PixelFormat == EPixelFormat::PF_G8)
+		{
+			ensureMsgf(RawImageData->GetBulkDataSize() == ImageWidth * ImageHeight,
+				TEXT("Unsupported texture data in UGoogleARCoreAugmentedImageDatabase::AddRuntimeAugmentedImage"));
+			GrayscaleBuffer = TArray<uint8>(RawBytes, PixelNum);
+		}
+		RawImageData->Unlock();
+
+		return AddRuntimeAugmentedImage(GrayscaleBuffer, ImageWidth, ImageHeight, ImageName, ImageWidthInMeter, ImageTexture);
+	}
+
+	UE_LOG(LogGoogleARCore, Warning, TEXT("Failed to add runtime augmented image: Unsupported texture format: %s. ARCore only support PF_B8G8R8A8 or PF_G8 for now for adding runtime Augmented Image"), GetPixelFormatString(PixelFormat));
+	return -1;
+}
+
+int UGoogleARCoreAugmentedImageDatabase::AddRuntimeAugmentedImage(const TArray<uint8>& ImageGrayscalePixels,
+	int ImageWidth, int ImageHeight, FName ImageName, float ImageWidthInMeter /*= 0*/, UTexture2D* ImageTexture /*= nullptr*/)
+{
+	int NewImageIndex = FGoogleARCoreDevice::GetInstance()->AddRuntimeAugmentedImage(this, ImageGrayscalePixels,
+		ImageWidth, ImageHeight, ImageName.ToString(), ImageWidthInMeter);
+
+	if (NewImageIndex == -1)
+	{
+		return -1;
+	}
+
+	FGoogleARCoreAugmentedImageDatabaseEntry NewEntry;
+	NewEntry.Name = ImageName;
+	NewEntry.ImageAsset = ImageTexture;
+	NewEntry.Width = ImageWidthInMeter;
+
+	Entries.Add(NewEntry);
+
+	return NewImageIndex;
+}
 
 void UGoogleARCoreAugmentedImageDatabase::Serialize(FArchive& Ar)
 {
@@ -152,7 +240,10 @@ void UGoogleARCoreAugmentedImageDatabase::Serialize(FArchive& Ar)
 					*FPaths::EnginePluginsDir(),
 					TEXT("Runtime"),
 					TEXT("GoogleARCore"),
-					TEXT("Tools"),
+					TEXT("Binaries"),
+					TEXT("ThirdParty"),
+					TEXT("Google"),
+					TEXT("ARCoreImg"),
 					*UGameplayStatics::GetPlatformName(),
 #if PLATFORM_LINUX
 					TEXT("arcoreimg")
@@ -235,6 +326,10 @@ void UGoogleARCoreAugmentedImageDatabase::Serialize(FArchive& Ar)
 			OutStderr = "";
 			OutStdout = "";
 			OutReturnCode = 0;
+
+#if PLATFORM_LINUX || PLATFORM_MAC
+			PlatformSetExecutable(*PathToDbTool, true);
+#endif
 
 			FPlatformProcess::ExecProcess(
 				*PathToDbTool,

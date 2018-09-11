@@ -390,6 +390,10 @@ template void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackable<UARTrackedG
 template void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackable<UARPlaneGeometry>(TArray<UARPlaneGeometry*>& OutTrackableList);
 template void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackable<UARTrackedPoint>(TArray<UARTrackedPoint*>& OutTrackableList);
 
+UTexture* UGoogleARCoreFrameFunctionLibrary::GetCameraTexture()
+{
+	return FGoogleARCoreDevice::GetInstance()->GetCameraTexture();
+}
 
 EGoogleARCoreFunctionStatus UGoogleARCoreFrameFunctionLibrary::AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage)
 {

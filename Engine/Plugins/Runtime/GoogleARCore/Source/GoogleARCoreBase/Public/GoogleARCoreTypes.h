@@ -272,6 +272,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GoogleARCore|PointCloud")
 	void GetPoint(int Index, FVector& OutWorldPosition, float& OutConfidence);
 
+	/**
+	 * Returns the point Id of the point at the given index.
+	 *
+	 * Each point has a unique identifier (within a session) that is persistent
+	 * across frames. That is, if a point from point cloud 1 has the same id as the
+	 * point from point cloud 2, then it represents the same point in space.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GoogleARCore|PointCloud")
+	int GetPointId(int Index);
+
 	/** Returns the point position in Unreal AR Tracking space. */
 	UFUNCTION(BlueprintPure, Category = "GoogleARCore|PointCloud")
 	void GetPointInTrackingSpace(int Index, FVector& OutTrackingSpaceLocation, float& OutConfidence);

@@ -11,6 +11,15 @@
 #include "Android/AndroidApplication.h"
 #include "Android/AndroidJNI.h"
 #include "arcore_c_api.h"
+
+//BEGIN_PRIVATE
+#define ARCORE_EXPERIMENTAL 0
+#if ARCORE_EXPERIMENTAL
+#define ARCORE_FEATURE_DECLARATION_ENABLED(experimental) 1
+#include "arcore_c_api_experimental.h"
+#endif
+//END_PRIVATE
+
 #endif
 
 namespace
@@ -78,6 +87,39 @@ namespace
 	{
 		FVector Result = ARCoreToUnrealTransform.TransformPosition(UnrealPosition / WorldToMeterScale);
 		return Result;
+	}
+
+	EGoogleARCoreAPIStatus DeerializeAugmentedImageDatabase(const ArSession* SessionHandle, UGoogleARCoreAugmentedImageDatabase* Database, ArAugmentedImageDatabase*& DatabaseNativeHandle)
+	{
+		if (Database->Entries.Num())
+		{
+			ArAugmentedImageDatabase* AugmentedImageDb = nullptr;
+
+			if (Database->SerializedDatabase.Num() == 0)
+			{
+				UE_LOG(LogGoogleARCoreAPI, Error, TEXT("AugmentedImageDatabase contains no cooked data! The cooking process for AugmentedImageDatabase may have failed. Check the Unreal Editor build log for details."));
+				return EGoogleARCoreAPIStatus::AR_ERROR_DATA_INVALID_FORMAT;
+			}
+
+			EGoogleARCoreAPIStatus Status = ToARCoreAPIStatus(
+				ArAugmentedImageDatabase_deserialize(
+					SessionHandle, &Database->SerializedDatabase[0],
+					Database->SerializedDatabase.Num(),
+					&AugmentedImageDb));
+
+			if (Status != EGoogleARCoreAPIStatus::AR_SUCCESS)
+			{
+				UE_LOG(LogGoogleARCoreAPI, Error, TEXT("ArAugmentedImageDatabase_deserialize failed!"));
+				return Status;
+			}
+
+			DatabaseNativeHandle = AugmentedImageDb;
+			return Status;
+		}
+		else
+		{
+			return EGoogleARCoreAPIStatus::AR_SUCCESS;
+		}
 	}
 #endif
 
@@ -266,35 +308,18 @@ EGoogleARCoreAPIStatus FGoogleARCoreSession::ConfigSession(const UARSessionConfi
 
 	if (GoogleConfig && GoogleConfig->AugmentedImageDatabase)
 	{
-		if (GoogleConfig->AugmentedImageDatabase->Entries.Num())
+		if (GoogleConfig->AugmentedImageDatabase->NativeHandle == nullptr)
 		{
-			ArAugmentedImageDatabase *AugmentedImageDb = nullptr;
-			UGoogleARCoreAugmentedImageDatabase *Database = GoogleConfig->AugmentedImageDatabase;
-
-			if (Database->SerializedDatabase.Num() == 0)
-			{
-				UE_LOG(LogGoogleARCoreAPI, Error, TEXT("AugmentedImageDatabase contains no cooked data! The cooking process for AugmentedImageDatabase may have failed. Check the Unreal Editor build log for details."));
-				return EGoogleARCoreAPIStatus::AR_ERROR_DATA_INVALID_FORMAT;
-			}
-
-			ConfigStatus = ToARCoreAPIStatus(
-				ArAugmentedImageDatabase_deserialize(
-					SessionHandle, &Database->SerializedDatabase[0],
-					Database->SerializedDatabase.Num(),
-					&AugmentedImageDb));
-
+			ConfigStatus = DeerializeAugmentedImageDatabase(SessionHandle, GoogleConfig->AugmentedImageDatabase, GoogleConfig->AugmentedImageDatabase->NativeHandle);
 			if (ConfigStatus != EGoogleARCoreAPIStatus::AR_SUCCESS)
 			{
-				UE_LOG(LogGoogleARCoreAPI, Error, TEXT("ArAugmentedImageDatabase_deserialize failed!"));
 				return ConfigStatus;
 			}
+		}
 
-			ArConfig_setAugmentedImageDatabase(
-				SessionHandle,
-				ConfigHandle,
-				AugmentedImageDb);
-
-			ArAugmentedImageDatabase_destroy(AugmentedImageDb);
+		if (GoogleConfig->AugmentedImageDatabase->NativeHandle != nullptr)
+		{
+			ArConfig_setAugmentedImageDatabase(SessionHandle, ConfigHandle, GoogleConfig->AugmentedImageDatabase->NativeHandle);
 		}
 		else
 		{
@@ -398,6 +423,49 @@ void FGoogleARCoreSession::GetARCameraConfig(FGoogleARCoreCameraConfig& OutCurre
 
 	ArCameraConfig_destroy(CameraConfigHandle);
 #endif
+}
+
+int FGoogleARCoreSession::AddRuntimeAugmentedImage(UGoogleARCoreAugmentedImageDatabase* TargetImageDatabase, const TArray<uint8>& ImageGrayscalePixels,
+	int ImageWidth, int ImageHeight, FString ImageName, float ImageWidthInMeter)
+{
+	int OutIndex = -1;
+	ensure(TargetImageDatabase != nullptr);
+
+#if PLATFORM_ANDROID
+	if (TargetImageDatabase->NativeHandle == nullptr)
+	{
+		if(DeerializeAugmentedImageDatabase(SessionHandle, TargetImageDatabase, TargetImageDatabase->NativeHandle) != EGoogleARCoreAPIStatus::AR_SUCCESS)
+		{
+			UE_LOG(LogGoogleARCoreAPI, Warning, TEXT("Failed to add runtime augmented image: AugmentedImageDatabase is corrupte."));
+			return -1;
+		}
+
+		// If the NativeHandle is still null when we get here, the TargetImageDatabase has no entry so we created an empty database here.
+		if (TargetImageDatabase->NativeHandle == nullptr)
+		{
+			ArAugmentedImageDatabase_create(SessionHandle, &TargetImageDatabase->NativeHandle);
+		}
+	}
+
+	ArStatus Status = AR_SUCCESS;
+	if (ImageWidthInMeter <= 0)
+	{
+		Status = ArAugmentedImageDatabase_addImage(SessionHandle, TargetImageDatabase->NativeHandle, TCHAR_TO_ANSI(*ImageName),
+			ImageGrayscalePixels.GetData(), ImageWidth, ImageHeight, ImageWidth, &OutIndex);
+	}
+	else
+	{
+		Status = ArAugmentedImageDatabase_addImageWithPhysicalSize(SessionHandle, TargetImageDatabase->NativeHandle, TCHAR_TO_ANSI(*ImageName),
+			ImageGrayscalePixels.GetData(), ImageWidth, ImageHeight, ImageWidth, ImageWidthInMeter, &OutIndex);
+	}
+
+	if (Status != AR_SUCCESS)
+	{
+		UE_LOG(LogGoogleARCoreAPI, Warning, TEXT("Failed to add runtime augmented image: image quality is insufficient. %d"), static_cast<int>(Status));
+		return -1;
+	}
+#endif
+	return OutIndex;
 }
 
 EGoogleARCoreAPIStatus FGoogleARCoreSession::Resume()
@@ -1200,8 +1268,8 @@ void FGoogleARCoreTrackedPlaneResource::UpdateGeometryData()
 	ArPlane_getExtentZ(SessionPtr->GetHandle(), GetPlaneHandle(), &ARCorePlaneExtentZ);
 
 	// Convert OpenGL axis to Unreal axis.
-	// Unreal TrackedPlaneGeometry extent is the length from  the plane center to edge.
-	Extent = FVector(-ARCorePlaneExtentZ / 2.0f, ARCorePlaneExtentX / 2.0f, 0) * SessionPtr->GetWorldToMeterScale();
+	// Unreal TrackedPlaneGeometry extent is the length from the plane center to edge.
+	Extent = FVector(FMath::Abs(ARCorePlaneExtentZ / 2.0f), FMath::Abs(ARCorePlaneExtentX / 2.0f), 0) * SessionPtr->GetWorldToMeterScale();
 
 	// Update Boundary Polygon
 	int PolygonSize = 0;
@@ -1303,7 +1371,7 @@ void FGoogleARCoreAugmentedImageResource::UpdateGeometryData()
 		&ImageIndex);
 
 	// Convert OpenGL axis to Unreal axis.
-	Extent = FVector(-ARCoreAugmentedImageExtentZ, ARCoreAugmentedImageExtentX, 0) * SessionPtr->GetWorldToMeterScale();
+	Extent = FVector(FMath::Abs(ARCoreAugmentedImageExtentZ), FMath::Abs(ARCoreAugmentedImageExtentX), 0) * SessionPtr->GetWorldToMeterScale();
 
 	uint32 FrameNum = SessionPtr->GetFrameNum();
 	int64 TimeStamp = SessionPtr->GetLatestFrame()->GetCameraTimestamp();
@@ -1389,6 +1457,21 @@ void UGoogleARCorePointCloud::GetPoint(int Index, FVector& OutWorldPosition, flo
 	OutWorldPosition = Point;
 	OutConfidence = Confidence;
 }
+
+int UGoogleARCorePointCloud::GetPointId(int Index)
+{
+	int Id = 0;
+	if (CheckIsSessionValid("ARCorePointCloud", Session))
+	{
+#if PLATFORM_ANDROID
+		const int32_t* Ids = 0;
+		ArPointCloud_getPointIds(Session.Pin()->GetHandle(), PointCloudHandle, &Ids);
+		Id = Ids[Index];
+#endif
+	}
+	return Id;
+}
+
 void UGoogleARCorePointCloud::GetPointInTrackingSpace(int Index, FVector& OutTrackingSpaceLocation, float& OutConfidence)
 {
 	FVector Point = FVector::ZeroVector;

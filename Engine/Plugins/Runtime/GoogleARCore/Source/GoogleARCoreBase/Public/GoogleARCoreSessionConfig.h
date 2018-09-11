@@ -19,6 +19,17 @@ class GOOGLEARCOREBASE_API UGoogleARCoreSessionConfig : public UARSessionConfig
 	// We keep the type here so that we could extends ARCore specific session config later.
 
 public:
+	UFUNCTION(BlueprintPure, Category = "google arcore augmentedimages")
+	UGoogleARCoreAugmentedImageDatabase* GetAugmentedImageDatabase()
+	{
+		return AugmentedImageDatabase;
+	}
+
+	UFUNCTION(BlueprintCallable, Category = "google arcore augmentedimages")
+	void SetAugmentedImageDatabase(UGoogleARCoreAugmentedImageDatabase* NewImageDatabase)
+	{
+		AugmentedImageDatabase = NewImageDatabase;
+	}
 
 	/**
 	 * A UGoogleARCoreAugmentedImageDatabase asset to use use for

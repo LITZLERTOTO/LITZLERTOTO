@@ -9,6 +9,7 @@
 #include "GoogleARCoreCameraImageBlitter.h"
 #include "GoogleARCoreAugmentedImage.h"
 #include "GoogleARCoreCameraIntrinsics.h"
+#include "GoogleARCoreAugmentedImageDatabase.h"
 #include "ARSessionConfig.h"
 
 #if PLATFORM_ANDROID
@@ -186,6 +187,8 @@ public:
 	TArray<FGoogleARCoreCameraConfig> GetSupportedCameraConfig();
 	EGoogleARCoreAPIStatus SetCameraConfig(FGoogleARCoreCameraConfig CameraConfig);
 	void GetARCameraConfig(FGoogleARCoreCameraConfig& OutCurrentCameraConfig);
+	int AddRuntimeAugmentedImage(UGoogleARCoreAugmentedImageDatabase* TargetImageDatabase, const TArray<uint8>& ImageGrayscalePixels,
+		int ImageWidth, int ImageHeight, FString ImageName, float ImageWidthInMeter);
 	EGoogleARCoreAPIStatus Resume();
 	EGoogleARCoreAPIStatus Pause();
 	EGoogleARCoreAPIStatus Update(float WorldToMeterScale);

@@ -11,6 +11,7 @@
 #include "GoogleARCoreTypes.h"
 #include "GoogleARCoreAPI.h"
 #include "GoogleARCorePassthroughCameraRenderer.h"
+#include "GoogleARCoreAugmentedImageDatabase.h"
 
 class FGoogleARCoreDevice
 {
@@ -39,6 +40,11 @@ public:
 
 	bool GetARCameraConfig(FGoogleARCoreCameraConfig& OutCurrentCameraConfig);
 
+	// Add image to TargetImageDatabase and return the image index.
+	// Return -1 if the image cannot be processed.
+	int AddRuntimeAugmentedImage(UGoogleARCoreAugmentedImageDatabase* TargetImageDatabase, const TArray<uint8>& ImageGrayscalePixels,
+		int ImageWidth, int ImageHeight, FString ImageName, float ImageWidthInMeter);
+
 	bool GetStartSessionRequestFinished();
 
 	void PauseARCoreSession();
@@ -61,6 +67,7 @@ public:
 #if PLATFORM_ANDROID
 	EGoogleARCoreFunctionStatus GetLatestCameraMetadata(const ACameraMetadata*& OutCameraMetadata) const;
 #endif
+	UTexture* GetCameraTexture();
 	EGoogleARCoreFunctionStatus AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage);
 
 	// Hit test

@@ -269,6 +269,16 @@ public:
 #endif
 
 	/**
+	 * Get the pass-through camera texture that GoogleARCore plugin will use to render the passthrough camera background.
+	 * Note that UTexture object this function returns may change every frame. If you want to use the camera texture, you should
+	 * call the function every frame and update the texture parameter in your material.
+	 *
+	 * @return A pointer to the UTexture that will be used to render the passthrough camera background.
+	 */
+	UFUNCTION(BlueprintPure, Category = "GoogleARCore|PassthroughCamera", meta = (Keywords = "googlear arcore passthroughcamera"))
+	static UTexture* GetCameraTexture();
+
+	/**
 	 * Acquire a CPU-accessible camera image.
 	 *
 	 * @param OutLatestCameraImage    A place to store the pointer to a new UGoogleARCoreCameraImage instance.
@@ -292,5 +302,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GoogleARCore|CameraIntrinsics", meta = (Keywords = "googlear arcore camera"))
 	static EGoogleARCoreFunctionStatus GetCameraTextureIntrinsics(UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics);
+
+
 
 };
