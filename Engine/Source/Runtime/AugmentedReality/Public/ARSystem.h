@@ -133,7 +133,9 @@ public:
 	/** @return the current mapping status */
 	virtual EARWorldMappingState OnGetWorldMappingStatus() const = 0;
 //@joeg -- End additions
-	
+
+	virtual bool OnAddRuntimeCandidateImage(UARSessionConfig* SessionConfig, UTexture2D* CandidateTexture, FString FriendlyName, float PhysicalWidth) = 0;
+
 public:
 	virtual ~IARSystemSupport(){}
 };
@@ -218,6 +220,9 @@ public:
 
 	virtual void* GetARSessionRawPointer() = 0;
 	virtual void* GetGameThreadARFrameRawPointer() = 0;
+
+	/** \see UARBlueprintLibrary::AddRuntimeCandidateImage() */
+	UARCandidateImage* AddRuntimeCandidateImage(UARSessionConfig* SessionConfig, UTexture2D* CandidateTexture, FString FriendlyName, float PhysicalWidth);
 	
 public:
 	const FTransform& GetAlignmentTransform() const;

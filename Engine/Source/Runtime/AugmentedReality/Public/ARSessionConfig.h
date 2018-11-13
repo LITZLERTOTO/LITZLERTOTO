@@ -135,7 +135,12 @@ public:
 	bool ShouldEnableAutoFocus() const;
 
 	/** @see CandidateImages */
+	UFUNCTION(BlueprintPure, Category = "AR Settings")
 	const TArray<UARCandidateImage*>& GetCandidateImageList() const;
+
+	// Add a new CandidateImage to the ARSessionConfig.
+	UFUNCTION(BlueprintCallable, Category = "AR Settings")
+	void AddCandidateImage(UARCandidateImage* NewCandidateImage);
     
 //@joeg -- Added image tracking support
 	/** @see MaxNumSimultaneousImagesTracked */
@@ -154,7 +159,9 @@ public:
 //@joeg -- For object detection
 	const TArray<UARCandidateObject*>& GetCandidateObjectList() const;
 	void AddCandidateObject(UARCandidateObject* CandidateObject);
-	
+
+	const TArray<uint8>& GetSerializedARCandidateImageDatabase() const;
+
 private:
 	//~ UObject interface
 	virtual void Serialize(FArchive& Ar) override;
@@ -224,4 +231,8 @@ protected:
 	/** A list of candidate objects to search for in the scene */
 	UPROPERTY(EditAnywhere, Category="AR Settings")
 	TArray<UARCandidateObject*> CandidateObjects;
+
+	/** Data array for storing the cooked image database */
+	UPROPERTY()
+	TArray<uint8> SerializedARCandidateImageDatabase;
 };

@@ -324,7 +324,8 @@ namespace UnrealBuildTool
 									   " -gcc-toolchain \"" + Path.Combine(NDKPath, @"toolchains/aarch64-linux-android-" + GccVersion, ArchitecturePath) + "\"";
 			ToolchainLinkParamsx86 = " -target i686-none-linux-android" +
 									   " --sysroot=\"" + Path.Combine(NDKPath, "platforms", NDKApiLevel32Bit, "arch-x86") + "\"" +
-									   " -gcc-toolchain \"" + Path.Combine(NDKPath, @"toolchains/x86-" + GccVersion, ArchitecturePath) + "\"";
+									   " -gcc-toolchain \"" + Path.Combine(NDKPath, @"toolchains/x86-" + GccVersion, ArchitecturePath) + "\"" +
+									   " -mstackrealign"; // We need to add '-mstackrealign' for ndk version below r14b.(r14b has the flag added automatically)
 			ToolchainLinkParamsx64 = " -target x86_64-none-linux-android" +
 									   " --sysroot=\"" + Path.Combine(NDKPath, "platforms", NDKApiLevel64Bit, "arch-x86_64") + "\"" +
 									   " -gcc-toolchain \"" + Path.Combine(NDKPath, @"toolchains\x86_64-" + GccVersion, ArchitecturePath) + "\"";
@@ -344,7 +345,7 @@ namespace UnrealBuildTool
 										" --sysroot=\"" + Path.Combine(NDKPath, "sysroot") + "\"" +
 										" -isystem " + Path.Combine(NDKPath, "sysroot/usr/include/i686-linux-android/") +
 										" -D__ANDROID_API__=" + NDKApiLevel32Int;
-				ToolchainParamsx86 = " -target x86_64-none-linux-android" +
+				ToolchainParamsx64 = " -target x86_64-none-linux-android" +
 										" --sysroot=\"" + Path.Combine(NDKPath, "sysroot") + "\"" +
 										" -isystem " + Path.Combine(NDKPath, "sysroot/usr/include/x86_64-linux-android/") +
 										" -D__ANDROID_API__=" + NDKApiLevel64Int;

@@ -8,6 +8,7 @@
 #include "ARSessionConfig.h"
 #include "GeneralProjectSettings.h"
 #include "Engine/Engine.h"
+#include "Engine/Texture2D.h"
 
 
 
@@ -148,6 +149,21 @@ UARPin* FARSystemBase::PinComponent( USceneComponent* ComponentToPin, const FART
 void FARSystemBase::RemovePin( UARPin* PinToRemove )
 {
 	OnRemovePin( PinToRemove );
+}
+
+UARCandidateImage* FARSystemBase::AddRuntimeCandidateImage(UARSessionConfig* SessionConfig, UTexture2D* CandidateTexture, FString FriendlyName, float PhysicalWidth)
+{
+	if (OnAddRuntimeCandidateImage(SessionConfig, CandidateTexture, FriendlyName, PhysicalWidth))
+	{
+		float PhysicalHeight = PhysicalWidth / CandidateTexture->GetSizeX() * CandidateTexture->GetSizeY();
+		UARCandidateImage* NewCandidateImage = UARCandidateImage::CreateNewARCandidateImage(CandidateTexture, FriendlyName, PhysicalWidth, PhysicalHeight, EARCandidateImageOrientation::Landscape);
+		SessionConfig->AddCandidateImage(NewCandidateImage);
+		return NewCandidateImage;
+	}
+	else
+	{
+		return nullptr;
+	}
 }
 
 const FTransform& FARSystemBase::GetAlignmentTransform() const

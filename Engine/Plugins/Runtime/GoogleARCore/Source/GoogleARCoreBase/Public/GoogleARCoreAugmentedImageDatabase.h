@@ -12,6 +12,11 @@
 typedef struct ArAugmentedImageDatabase_ ArAugmentedImageDatabase;
 #endif
 
+/**
+ * A single entry in a UGoogleARCoreAugmentedImageDatabase.
+ *
+ * Deprecated. Please use the cross-platform UARCandidateImage instead.
+ */
 USTRUCT(BlueprintType)
 struct FGoogleARCoreAugmentedImageDatabaseEntry
 {
@@ -41,6 +46,12 @@ struct FGoogleARCoreAugmentedImageDatabaseEntry
 		: Width(0.0f) { }
 };
 
+/**
+ * A collection of processed images for ARCore to track.
+ *
+ * Deprecated. Please use the ARCandidateImage list in UARSessionConfig instead.
+ */
+
 UCLASS(BlueprintType)
 class GOOGLEARCOREBASE_API UGoogleARCoreAugmentedImageDatabase : public UDataAsset
 {
@@ -55,7 +66,7 @@ public:
 	 *
 	 * You need to restart the ARCore session with the config that contains this AugmentedImageDatabase to make
 	 * track those new images.
-	 * 
+	 *
 	 * You can set the ImageWidthInMeter value if the physical size of the image is known. This will
 	 * help ARCore estimate the pose of the physical image as soon as ARCore detects the physical image.
 	 * Otherwise, ARCore will requiring the user to move the device to view the physical image from
@@ -64,6 +75,7 @@ public:
 	 * Note that this function takes time to perform non-trivial image processing (20ms - 30ms), and should
 	 * be run on a background thread.
 	 */
+	DEPRECATED(4.20, "Please use UARBlueprintLibrary::AddRuntimeCandidateImage() instead.")
 	UFUNCTION(BlueprintCallable, Category = "google arcore augmentedimages")
 	int AddRuntimeAugmentedImageFromTexture(UTexture2D* ImageTexture, FName ImageName, float ImageWidthInMeter = 0);
 
@@ -83,14 +95,26 @@ public:
 	 * Note that this function takes time to perform non-trivial image processing (20ms - 30ms), and should
 	 * be run on a background thread.
 	 */
+	// DEPRECATED(4.20, "Please use UGoogleARCoreSessionFunctionLibrary::AddRuntimeCandidateImageFromRawbytes() instead.")
 	int AddRuntimeAugmentedImage(const TArray<uint8>& ImageGrayscalePixels, int ImageWidth, int ImageHeight,
 		FName ImageName, float ImageWidthInMeter = 0, UTexture2D* ImageTexture = nullptr);
 
+	/**
+	 * Overridden serialization function.
+	 */
 	virtual void Serialize(FArchive& Ar) override;
 
+	/**
+	 * The individual instances of
+	 * FGoogleARCoreAugmentedImageDatabaseEntry objects.
+	 */
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "GoogleARCore|AugmentedImages")
 	TArray<FGoogleARCoreAugmentedImageDatabaseEntry> Entries;
 
+	/**
+	 * The serialized database, in the ARCore augmented image database
+	 * serialization format.
+	 */
 	UPROPERTY()
 	TArray<uint8> SerializedDatabase;
 

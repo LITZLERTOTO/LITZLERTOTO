@@ -2,6 +2,9 @@
 
 #include "ARSessionConfig.h"
 #include "UObject/VRObjectVersion.h"
+#include "Containers/StringConv.h"
+#include "Misc/CoreMisc.h"
+#include "ARSessionConfigCookSupport.h"
 
 UARSessionConfig::UARSessionConfig()
 : WorldAlignment(EARWorldAlignment::Gravity)
@@ -66,6 +69,11 @@ const TArray<UARCandidateImage*>& UARSessionConfig::GetCandidateImageList() cons
 	return CandidateImages;
 }
 
+void UARSessionConfig::AddCandidateImage(UARCandidateImage* NewCandidateImage)
+{
+	CandidateImages.Add(NewCandidateImage);
+}
+
 //@joeg -- Added image tracking support
 int32 UARSessionConfig::GetMaxNumSimultaneousImagesTracked() const
 {
@@ -105,10 +113,25 @@ void UARSessionConfig::AddCandidateObject(UARCandidateObject* CandidateObject)
 	}
 }
 //@joeg -- end object detection
+const TArray<uint8>& UARSessionConfig::GetSerializedARCandidateImageDatabase() const
+{
+	return SerializedARCandidateImageDatabase;
+}
 
 void UARSessionConfig::Serialize(FArchive& Ar)
 {
 	Ar.UsingCustomVersion(FVRObjectVersion::GUID);
+
+#if WITH_EDITORONLY_DATA
+	if (!Ar.IsLoading() && Ar.IsCooking())
+	{
+		TArray<IARSessionConfigCookSupport*> CookSupportModules = IModularFeatures::Get().GetModularFeatureImplementations<IARSessionConfigCookSupport>(IARSessionConfigCookSupport::GetModularFeatureName());
+		for (IARSessionConfigCookSupport* CookSupportModule : CookSupportModules)
+		{
+			CookSupportModule->OnSerializeSessionConfig(this, Ar, SerializedARCandidateImageDatabase);
+		}
+	}
+#endif
 
 	Super::Serialize(Ar);
 

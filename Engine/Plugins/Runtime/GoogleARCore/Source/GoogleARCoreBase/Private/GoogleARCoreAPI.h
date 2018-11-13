@@ -83,6 +83,17 @@ enum class EGoogleARCoreAPIStatus : int
 	/// The data passed in for this operation was not in a valid format.
 	AR_ERROR_DATA_INVALID_FORMAT = -18,
 
+	/// The data passed in for this operation is not supported by this version
+	/// of the SDK.
+	AR_ERROR_DATA_UNSUPPORTED_VERSION = -19,
+
+	/// A function has been invoked at an illegal or inappropriate time. A
+	/// message will be printed to logcat with additional details for the
+	/// developer.  For example, ArSession_resume() will return this status if
+	/// the camera configuration was changed and there are any unreleased
+	/// images
+	AR_ERROR_ILLEGAL_STATE = -20,
+
 	/// The ARCore APK is not installed on this device.
 	AR_UNAVAILABLE_ARCORE_NOT_INSTALLED = -100,
 
@@ -184,11 +195,14 @@ public:
 	// Lifecycle
 	bool IsConfigSupported(const UARSessionConfig& Config);
 	EGoogleARCoreAPIStatus ConfigSession(const UARSessionConfig& Config);
+	const UARSessionConfig* GetCurrentSessionConfig();
 	TArray<FGoogleARCoreCameraConfig> GetSupportedCameraConfig();
 	EGoogleARCoreAPIStatus SetCameraConfig(FGoogleARCoreCameraConfig CameraConfig);
 	void GetARCameraConfig(FGoogleARCoreCameraConfig& OutCurrentCameraConfig);
 	int AddRuntimeAugmentedImage(UGoogleARCoreAugmentedImageDatabase* TargetImageDatabase, const TArray<uint8>& ImageGrayscalePixels,
 		int ImageWidth, int ImageHeight, FString ImageName, float ImageWidthInMeter);
+	bool AddRuntimeCandidateImage(UARSessionConfig* SessionConfig, const TArray<uint8>& ImageGrayscalePixels,
+		int ImageWidth, int ImageHeight, FString FriendlyName, float PhysicalWidth);
 	EGoogleARCoreAPIStatus Resume();
 	EGoogleARCoreAPIStatus Pause();
 	EGoogleARCoreAPIStatus Update(float WorldToMeterScale);
@@ -218,10 +232,10 @@ private:
 	uint32 FrameNumber;
 
 	TSharedPtr<FARSystemBase, ESPMode::ThreadSafe> ARSystem;
-
 #if PLATFORM_ANDROID
 	ArSession* SessionHandle = nullptr;
 	ArConfig* ConfigHandle = nullptr;
+	TMap<const UARSessionConfig*, ArAugmentedImageDatabase*> ImageDatabaseMap;
 #endif
 };
 
@@ -283,7 +297,7 @@ private:
 	ArPose* SketchPoseHandle = nullptr;
 	ArImageMetadata* LatestImageMetadata = nullptr;
 
-	void FilterLineTraceResults(ArHitResultList* HitResultList, EGoogleARCoreLineTraceChannel RequestedTraceChannels, 
+	void FilterLineTraceResults(ArHitResultList* HitResultList, EGoogleARCoreLineTraceChannel RequestedTraceChannels,
 		TArray<FARTraceResult>& OutHitResults, float MaxDistance = TNumericLimits<float>::Max()) const;
 #endif
 };

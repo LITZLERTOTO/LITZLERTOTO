@@ -985,6 +985,12 @@ EARWorldMappingState FAppleARKitSystem::OnGetWorldMappingStatus() const
 	return EARWorldMappingState::NotAvailable;
 }
 
+bool FAppleARKitSystem::OnAddRuntimeCandidateImage(UARSessionConfig* SessionConfig, UTexture2D* CandidateTexture, FString FriendlyName, float PhysicalWidth)
+{
+	// ARKit candidate image are converted automatically when the session configuration is applied.
+	return true;
+}
+
 //@joeg -- End additions
 
 void FAppleARKitSystem::AddReferencedObjects( FReferenceCollector& Collector )
@@ -1287,7 +1293,10 @@ static TSharedPtr<FAppleARKitAnchorData> MakeAnchorData( ARAnchor* Anchor )
 			FString(ImageAnchor.referenceImage.name)
 		);
 #if SUPPORTS_ARKIT_2_0
-		NewAnchor->bIsTracked = ImageAnchor.isTracked;
+		if (FAppleARKitAvailability::SupportsARKit20())
+		{
+			NewAnchor->bIsTracked = ImageAnchor.isTracked;
+		}
 #endif
 	}
 #endif
@@ -1453,7 +1462,8 @@ void FAppleARKitSystem::SessionDidAddAnchors_Internal( TSharedRef<FAppleARKitAnc
 			UARTrackedImage* NewImage = NewObject<UARTrackedImage>();
 			UARCandidateImage** CandidateImage = CandidateImages.Find(AnchorData->DetectedAnchorName);
 			ensure(CandidateImage != nullptr);
-			NewImage->UpdateTrackedGeometry(SharedThis(this), GameThreadFrameNumber, GameThreadTimestamp, AnchorData->Transform, GetAlignmentTransform(), *CandidateImage);
+			FVector2D PhysicalSize((*CandidateImage)->GetPhysicalWidth(), (*CandidateImage)->GetPhysicalHeight());
+			NewImage->UpdateTrackedGeometry(SharedThis(this), GameThreadFrameNumber, GameThreadTimestamp, AnchorData->Transform, GetAlignmentTransform(), PhysicalSize, *CandidateImage);
 			NewGeometry = NewImage;
 			break;
 		}
@@ -1562,8 +1572,8 @@ void FAppleARKitSystem::SessionDidUpdateAnchors_Internal( TSharedRef<FAppleARKit
 //@joeg -- Changed so object and image detection can share
 					UARCandidateImage** CandidateImage = CandidateImages.Find(AnchorData->DetectedAnchorName);
 					ensure(CandidateImage != nullptr);
-
-					ImageAnchor->UpdateTrackedGeometry(SharedThis(this), GameThreadFrameNumber, GameThreadTimestamp, AnchorData->Transform, GetAlignmentTransform(), *CandidateImage);
+					FVector2D PhysicalSize((*CandidateImage)->GetPhysicalWidth(), (*CandidateImage)->GetPhysicalHeight());
+					ImageAnchor->UpdateTrackedGeometry(SharedThis(this), GameThreadFrameNumber, GameThreadTimestamp, AnchorData->Transform, GetAlignmentTransform(), PhysicalSize, *CandidateImage);
 					ImageAnchor->bIsTracked = AnchorData->bIsTracked;
 					for (UARPin* Pin : PinsToUpdate)
 					{

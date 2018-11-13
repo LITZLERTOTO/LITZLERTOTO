@@ -197,7 +197,7 @@ UGoogleARCoreEventManager* UGoogleARCoreSessionFunctionLibrary::GetARCoreEventMa
 	{
 		return nullptr;
 	}
-	
+
 }
 
 struct FARCoreStartSessionAction : public FPendingLatentAction
@@ -300,6 +300,25 @@ template< class T >
 void UGoogleARCoreSessionFunctionLibrary::GetAllTrackable(TArray<T*>& OutTrackableList)
 {
 	FGoogleARCoreDevice::GetInstance()->GetAllTrackables<T>(OutTrackableList);
+}
+
+UARCandidateImage* UGoogleARCoreSessionFunctionLibrary::AddRuntimeCandidateImageFromRawbytes(UARSessionConfig* SessionConfig, const TArray<uint8>& ImageGrayscalePixels,
+	int ImageWidth, int ImageHeight, FString FriendlyName, float PhysicalWidth, UTexture2D* CandidateTexture /*= nullptr*/)
+{
+	auto ARSystem = FGoogleARCoreDevice::GetInstance()->GetARSystem();
+	if (ARSystem.IsValid())
+	{
+		FGoogleARCoreXRTrackingSystem* GoogleARCoreSystem = static_cast<FGoogleARCoreXRTrackingSystem*>(ARSystem.Get());
+		if (GoogleARCoreSystem->AddRuntimeGrayscaleImage(SessionConfig, ImageGrayscalePixels, ImageWidth, ImageHeight, FriendlyName, PhysicalWidth))
+		{
+			float PhysicalHeight = PhysicalWidth / ImageWidth * ImageHeight;
+			UARCandidateImage* NewCandidateImage = UARCandidateImage::CreateNewARCandidateImage(CandidateTexture, FriendlyName, PhysicalWidth, PhysicalHeight, EARCandidateImageOrientation::Landscape);
+			SessionConfig->AddCandidateImage(NewCandidateImage);
+			return NewCandidateImage;
+		}
+	}
+
+	return nullptr;
 }
 
 template void UGoogleARCoreSessionFunctionLibrary::GetAllTrackable<UARTrackedGeometry>(TArray<UARTrackedGeometry*>& OutTrackableList);

@@ -22,11 +22,11 @@ void UGoogleARCoreAugmentedImage::DebugDraw(
 	FTransform CenterTransform =
 		GetLocalToTrackingTransform();
 
-	FVector HalfExtent(Extent / 2.0f);
-	FVector Corner0(-HalfExtent.X, -HalfExtent.Y, 0.0f);
-	FVector Corner1( HalfExtent.X, -HalfExtent.Y, 0.0f);
-	FVector Corner2( HalfExtent.X,  HalfExtent.Y, 0.0f);
-	FVector Corner3(-HalfExtent.X,  HalfExtent.Y, 0.0f);
+	FVector2D HalfExtent(EstimatedSize / 2.0f);
+	FVector Corner0(-HalfExtent.Y, -HalfExtent.X, 0.0f);
+	FVector Corner1( HalfExtent.Y, -HalfExtent.X, 0.0f);
+	FVector Corner2( HalfExtent.Y,  HalfExtent.X, 0.0f);
+	FVector Corner3(-HalfExtent.Y,  HalfExtent.X, 0.0f);
 
 	DrawDebugLine(
 		World,
@@ -70,25 +70,26 @@ void UGoogleARCoreAugmentedImage::DebugDraw(
 void UGoogleARCoreAugmentedImage::UpdateTrackedGeometry(
 	const TSharedRef<FARSystemBase, ESPMode::ThreadSafe>& InTrackingSystem,
 	uint32 FrameNumber, double Timestamp, const FTransform& InLocalToTrackingTransform,
-	const FTransform& InAlignmentTransform, const FVector &InCenter, const FVector &InExtent,
+	const FTransform& InAlignmentTransform,
+	FVector2D InEstimatedSize, UARCandidateImage* InDetectedImage,
 	int32 InImageIndex, const FString& InImageName)
 {
-	Super::UpdateTrackedGeometry(InTrackingSystem, FrameNumber, Timestamp, InLocalToTrackingTransform, InAlignmentTransform);
+	Super::UpdateTrackedGeometry(InTrackingSystem, FrameNumber, Timestamp, InLocalToTrackingTransform, InAlignmentTransform, InEstimatedSize, InDetectedImage);
 
-	Center = InCenter;
-	Extent = InExtent;
 	ImageIndex = InImageIndex;
 	ImageName = InImageName;
+
+	bIsTracked = (GetTrackingState() == EARTrackingState::Tracking);
 }
 
 FVector UGoogleARCoreAugmentedImage::GetCenter() const
 {
-	return Center;
+	return FVector::ZeroVector;
 }
 
 FVector UGoogleARCoreAugmentedImage::GetExtent() const
 {
-	return Extent;
+	return FVector(EstimatedSize.Y, 0.0f, EstimatedSize.X);
 }
 
 int32 UGoogleARCoreAugmentedImage::GetImageIndex() const
@@ -98,5 +99,13 @@ int32 UGoogleARCoreAugmentedImage::GetImageIndex() const
 
 FString UGoogleARCoreAugmentedImage::GetImageName() const
 {
-	return ImageName;
+	if (DetectedImage != nullptr)
+	{
+		return GetDetectedImage()->GetFriendlyName();
+
+	}
+	else
+	{
+		return ImageName;
+	}
 }

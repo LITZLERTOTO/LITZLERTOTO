@@ -43,6 +43,9 @@ public:
 
 	UGoogleARCoreEventManager* GetEventManager();
 
+	bool AddRuntimeGrayscaleImage(UARSessionConfig* SessionConfig, const TArray<uint8>& ImageGrayscalePixels, int ImageWidth, int ImageHeight,
+		FString FriendlyName, float PhysicalWidth);
+
 protected:
 	// IARSystemSupport
 	virtual void OnARSystemInitialized() override;
@@ -67,6 +70,8 @@ protected:
 	virtual TSharedPtr<FARSaveWorldAsyncTask, ESPMode::ThreadSafe> OnSaveWorld() const { return TSharedPtr<FARSaveWorldAsyncTask, ESPMode::ThreadSafe>(); }
 	// @todo -- support this properly
 	virtual EARWorldMappingState OnGetWorldMappingStatus() const { return EARWorldMappingState::StillMappingNotRelocalizable; }
+
+	virtual bool OnAddRuntimeCandidateImage(UARSessionConfig* SessionConfig, UTexture2D* CandidateTexture, FString FriendlyName, float PhysicalWidth) override;
 
 private:
 	//~ FGCObject
