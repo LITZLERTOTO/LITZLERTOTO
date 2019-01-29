@@ -24,6 +24,8 @@ namespace UnrealBuildTool.Rules
 					}
 				);
 
+			PublicIncludePathModuleNames.Add("TargetPlatform");
+
 			PrivateDependencyModuleNames.AddRange(
 				new string[]
 				{
@@ -40,6 +42,7 @@ namespace UnrealBuildTool.Rules
 					"GoogleARCoreRendering",
 					"GoogleARCoreSDK",
 					"OpenGL",
+					"ProceduralMeshComponent",
 					"UElibPNG",
 					"zlib"
 				}
@@ -76,13 +79,13 @@ namespace UnrealBuildTool.Rules
 				{
 					ExecName = "Mac/ptdbtool_macos_lipobin";
 				}
-				
+
 				if (ExecName.Length > 0)
 				{
 					RuntimeDependencies.Add("$(EngineDir)/Plugins/Runtime/GoogleARCore/Binaries/ThirdParty/Google/ARCoreImg/" + ExecName);
 				}
 			}
-			
+
 			bFasterWithoutUnity = false;
         }
     }

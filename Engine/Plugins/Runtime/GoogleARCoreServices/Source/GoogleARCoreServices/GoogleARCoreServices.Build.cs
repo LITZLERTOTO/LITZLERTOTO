@@ -16,7 +16,7 @@ namespace UnrealBuildTool.Rules
 					"GoogleARCoreServices/Private",
 				}
 			);
-			
+
 			PublicDependencyModuleNames.AddRange(
 					new string[]
 					{

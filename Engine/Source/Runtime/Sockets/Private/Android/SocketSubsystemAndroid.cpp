@@ -212,6 +212,16 @@ TSharedRef<FInternetAddr> FSocketSubsystemAndroid::GetLocalHostAddr(FOutputDevic
 			{
 				// Prefer Wifi
 				NewAddrRef.SetIp(WifiAddress);
+
+				// TODO: Figure out the correctly way to handle this.
+				// It seems Android returns a wired ss_family (4163?) for the wlan0 ifr_addr. This will cause the SetIp fail so we set it again here.
+				// So we set the Addr using the previous way.
+				if (WifiAddress.ss_family != AF_INET && WifiAddress.ss_family != AF_INET6)
+				{
+					const sockaddr_in* SockAddr = (const sockaddr_in*)&WifiAddress;
+					Addr->SetIp(ntohl(SockAddr->sin_addr.s_addr));
+				}
+
 				UE_LOG(LogSockets, Log, TEXT("(%s) Wifi Adapter IP %s"), GetSocketAPIName(), *Addr->ToString(false));
 			}
 			else if (CellularAddress.ss_family != AF_UNSPEC)

@@ -137,7 +137,9 @@ public:
 	
 	/** @return the current point cloud data for the ar scene */
 	virtual TArray<FVector> OnGetPointCloud() const = 0;
-	
+
+	virtual bool OnAddRuntimeCandidateImage(UARSessionConfig* SessionConfig, UTexture2D* CandidateTexture, FString FriendlyName, float PhysicalWidth) = 0;
+
 public:
 	virtual ~IARSystemSupport(){}
 };
@@ -226,6 +228,9 @@ public:
 
 	virtual void* GetARSessionRawPointer() = 0;
 	virtual void* GetGameThreadARFrameRawPointer() = 0;
+
+	/** \see UARBlueprintLibrary::AddRuntimeCandidateImage() */
+	UARCandidateImage* AddRuntimeCandidateImage(UARSessionConfig* SessionConfig, UTexture2D* CandidateTexture, FString FriendlyName, float PhysicalWidth);
 	
 public:
 	const FTransform& GetAlignmentTransform() const;

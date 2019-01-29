@@ -35,6 +35,8 @@ namespace
 			return EGoogleARCoreFunctionStatus::ResourceExhausted;
 		case EGoogleARCoreAPIStatus::AR_ERROR_NOT_YET_AVAILABLE:
 			return EGoogleARCoreFunctionStatus::NotAvailable;
+		case EGoogleARCoreAPIStatus::AR_ERROR_ILLEGAL_STATE:
+			return EGoogleARCoreFunctionStatus::IllegalState;
 		default:
 			ensureMsgf(false, TEXT("Unknown conversion from EGoogleARCoreAPIStatus %d to EGoogleARCoreFunctionStatus."), static_cast<int>(Status));
 			return EGoogleARCoreFunctionStatus::Unknown;
@@ -66,7 +68,7 @@ FGoogleARCoreDevice::FGoogleARCoreDevice()
 	, WorldToMeterScale(100.0f)
 	, PermissionHandler(nullptr)
 	, bDisplayOrientationChanged(false)
-	, CurrentSessionStatus(EARSessionStatus::NotStarted)
+	, CurrentSessionStatus(EARSessionStatus::NotStarted, TEXT("ARCore Session is uninitialized."))
 {
 }
 
@@ -82,7 +84,7 @@ EGoogleARCoreAPIStatus FGoogleARCoreDevice::RequestInstall(bool bUserRequestedIn
 
 bool FGoogleARCoreDevice::GetIsTrackingTypeSupported(EARSessionType SessionType)
 {
-	if (SessionType == EARSessionType::World)
+	if (SessionType == EARSessionType::World || SessionType == EARSessionType::Face)
 	{
 		return true;
 	}
@@ -103,8 +105,10 @@ void FGoogleARCoreDevice::OnModuleLoaded()
 void FGoogleARCoreDevice::OnModuleUnloaded()
 {
 	FWorldDelegates::OnWorldTickStart.RemoveAll(this);
-	// clear the unique ptr.
+	// clear the shared ptr.
 	ARCoreSession.Reset();
+	FrontCameraARCoreSession.Reset();
+	BackCameraARCoreSession.Reset();
 }
 
 bool FGoogleARCoreDevice::GetIsARCoreSessionRunning()
@@ -112,7 +116,7 @@ bool FGoogleARCoreDevice::GetIsARCoreSessionRunning()
 	return bIsARCoreSessionRunning;
 }
 
-EARSessionStatus FGoogleARCoreDevice::GetSessionStatus()
+FARSessionStatus FGoogleARCoreDevice::GetSessionStatus()
 {
 	return CurrentSessionStatus;
 }
@@ -127,7 +131,11 @@ void FGoogleARCoreDevice::StartARCoreSessionRequest(UARSessionConfig* SessionCon
 {
 	UE_LOG(LogGoogleARCore, Log, TEXT("Start ARCore session requested."));
 
-	if (bIsARCoreSessionRunning)
+	// The new SessionConfig should be set to the session already at this point. We can check if it is front camera session here.
+	bool bShouldUseFrontCamera = GetIsFrontCameraSession();
+	bool bShouldSwitchCamera = bShouldUseFrontCamera ? ARCoreSession == BackCameraARCoreSession : ARCoreSession == FrontCameraARCoreSession;
+
+	if (bIsARCoreSessionRunning && !bShouldSwitchCamera)
 	{
 		UE_LOG(LogGoogleARCore, Log, TEXT("ARCore session is already running, set it to use the new session config."));
 		EGoogleARCoreAPIStatus Status = ARCoreSession->ConfigSession(*SessionConfig);
@@ -140,6 +148,10 @@ void FGoogleARCoreDevice::StartARCoreSessionRequest(UARSessionConfig* SessionCon
 	{
 		UE_LOG(LogGoogleARCore, Warning, TEXT("ARCore session is already starting. This will overriding the previous session config with the new one."))
 	}
+	else 
+	{
+		PauseARCoreSession();
+	}
 
 	bStartSessionRequested = true;
 	// Re-request permission if necessary
@@ -147,7 +159,7 @@ void FGoogleARCoreDevice::StartARCoreSessionRequest(UARSessionConfig* SessionCon
 	bARCoreInstallRequested = false;
 
 	// Try recreating the ARCoreSession to fix the fatal error.
-	if (CurrentSessionStatus == EARSessionStatus::FatalError)
+	if (CurrentSessionStatus.Status == EARSessionStatus::FatalError)
 	{
 		UE_LOG(LogGoogleARCore, Warning, TEXT("Reset ARCore session due to fatal error detected."));
 		ResetARCoreSession();
@@ -187,6 +199,71 @@ bool FGoogleARCoreDevice::GetARCameraConfig(FGoogleARCoreCameraConfig& OutCurren
 	}
 }
 
+bool FGoogleARCoreDevice::GetIsFrontCameraSession()
+{
+	UARSessionConfig* CurrentConfig = AccessSessionConfig();
+
+	if (CurrentConfig->GetSessionType() == EARSessionType::Face)
+	{
+		return true;
+	}
+
+	UGoogleARCoreSessionConfig* ARCoreSessionConfig = Cast<UGoogleARCoreSessionConfig>(CurrentConfig);
+	if (ARCoreSessionConfig != nullptr && ARCoreSessionConfig->CameraFacing == EGoogleARCoreCameraFacing::Front)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+bool FGoogleARCoreDevice::GetShouldInvertCulling()
+{
+	UARSessionConfig* CurrentConfig = AccessSessionConfig();
+	UGoogleARCoreSessionConfig* ARCoreSessionConfig = Cast<UGoogleARCoreSessionConfig>(CurrentConfig);
+
+	if(!CurrentConfig->ShouldEnableCameraTracking())
+	{
+		return false;
+	}
+
+	if (CurrentConfig->GetSessionType() == EARSessionType::Face)
+	{
+		return true;
+	}
+
+	if (ARCoreSessionConfig != nullptr && ARCoreSessionConfig->CameraFacing == EGoogleARCoreCameraFacing::Front)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+int FGoogleARCoreDevice::AddRuntimeAugmentedImage(UGoogleARCoreAugmentedImageDatabase* TargetImageDatabase, const TArray<uint8>& ImageGrayscalePixels,
+	int ImageWidth, int ImageHeight, FString ImageName, float ImageWidthInMeter)
+{
+	if (!ARCoreSession.IsValid())
+	{
+		UE_LOG(LogGoogleARCore, Warning, TEXT("Failed to add runtime augmented image: No valid session!"));
+		return -1;
+	}
+
+	return ARCoreSession->AddRuntimeAugmentedImage(TargetImageDatabase, ImageGrayscalePixels, ImageWidth, ImageHeight, ImageName, ImageWidthInMeter);
+}
+
+bool FGoogleARCoreDevice::AddRuntimeCandidateImage(UARSessionConfig* SessionConfig, const TArray<uint8>& ImageGrayscalePixels, int ImageWidth, int ImageHeight,
+	FString FriendlyName, float PhysicalWidth)
+{
+	if (!ARCoreSession.IsValid())
+	{
+		UE_LOG(LogGoogleARCore, Warning, TEXT("Failed to add runtime candidate image: No valid session!"));
+		return false;
+	}
+
+	return ARCoreSession->AddRuntimeCandidateImage(SessionConfig, ImageGrayscalePixels, ImageWidth, ImageHeight, FriendlyName, PhysicalWidth);
+}
+
 bool FGoogleARCoreDevice::GetStartSessionRequestFinished()
 {
 	return !bStartSessionRequested;
@@ -212,7 +289,8 @@ void FGoogleARCoreDevice::OnWorldTickStart(ELevelTick TickType, float DeltaTime)
 			if (Status != EGoogleARCoreAPIStatus::AR_SUCCESS)
 			{
 				bStartSessionRequested = false;
-				CurrentSessionStatus = EARSessionStatus::NotSupported;
+				CurrentSessionStatus.Status = EARSessionStatus::NotSupported;
+				CurrentSessionStatus.AdditionalInfo = TEXT("ARCore APK installation failed on this device.");
 			}
 			else if (InstallStatus == EGoogleARCoreInstallStatus::Installed)
 			{
@@ -226,7 +304,8 @@ void FGoogleARCoreDevice::OnWorldTickStart(ELevelTick TickType, float DeltaTime)
 
 		else if (bPermissionDeniedByUser)
 		{
-			CurrentSessionStatus = EARSessionStatus::PermissionNotGranted;
+			CurrentSessionStatus.Status = EARSessionStatus::PermissionNotGranted;
+			CurrentSessionStatus.AdditionalInfo = TEXT("Camera permission has been denied by the user.");
 			bStartSessionRequested = false;
 		}
 		else
@@ -255,7 +334,8 @@ void FGoogleARCoreDevice::OnWorldTickStart(ELevelTick TickType, float DeltaTime)
 		{
 			ARCoreSession->Pause();
 			bIsARCoreSessionRunning = false;
-			CurrentSessionStatus = EARSessionStatus::FatalError;
+			CurrentSessionStatus.Status = EARSessionStatus::FatalError;
+			CurrentSessionStatus.AdditionalInfo = TEXT("Fatal error occurred when updating ARCore Session. Stopping and restarting ARCore Session may fix the issue.");
 		}
 		else
 		{
@@ -341,38 +421,77 @@ void FGoogleARCoreDevice::StartSessionWithRequestedConfig()
 		FlushRenderingCommands();
 	}
 
+	UARSessionConfig* RequestedConfig = AccessSessionConfig();
+	UGoogleARCoreSessionConfig* ARCoreConfig = Cast<UGoogleARCoreSessionConfig>(RequestedConfig);
+	bool bUseFrontCamera = (ARCoreConfig != nullptr && ARCoreConfig->CameraFacing == EGoogleARCoreCameraFacing::Front)
+		|| RequestedConfig->GetSessionType() == EARSessionType::Face;
+
+	if (bUseFrontCamera)
+	{
+		if (!FrontCameraARCoreSession.IsValid())
+		{
+			FrontCameraARCoreSession = CreateSession(true);
+		}
+
+		ARCoreSession = FrontCameraARCoreSession;
+	}
+	else
+	{
+		if (!BackCameraARCoreSession.IsValid())
+		{
+			BackCameraARCoreSession = CreateSession(false);
+		}
+
+		ARCoreSession = BackCameraARCoreSession;
+	}
+
 	if (!ARCoreSession.IsValid())
 	{
-		ARCoreSession = FGoogleARCoreSession::CreateARCoreSession();
-		EGoogleARCoreAPIStatus SessionCreateStatus = ARCoreSession->GetSessionCreateStatus();
-		if (SessionCreateStatus != EGoogleARCoreAPIStatus::AR_SUCCESS)
-		{
-			ensureMsgf(false, TEXT("Failed to create ARCore session with error status: %d"), (int)SessionCreateStatus);
-			if (SessionCreateStatus != EGoogleARCoreAPIStatus::AR_ERROR_FATAL)
-			{
-				CurrentSessionStatus = EARSessionStatus::NotSupported;
-			}
-			else
-			{
-				CurrentSessionStatus = EARSessionStatus::FatalError;
-			}
-			ARCoreSession.Reset();
-			return;
-		}
-		ARCoreSession->SetARSystem(ARSystem.ToSharedRef());
+		return;
 	}
 
 	StartSession();
 }
 
+TSharedPtr<FGoogleARCoreSession> FGoogleARCoreDevice::CreateSession(bool bUseFrontCamera)
+{
+	TSharedPtr<FGoogleARCoreSession> NewARCoreSession = FGoogleARCoreSession::CreateARCoreSession(bUseFrontCamera);
+	EGoogleARCoreAPIStatus SessionCreateStatus = NewARCoreSession->GetSessionCreateStatus();
+	if (SessionCreateStatus != EGoogleARCoreAPIStatus::AR_SUCCESS)
+	{
+		ensureMsgf(false, TEXT("Failed to create ARCore session with error status: %d"), (int)SessionCreateStatus);
+		CurrentSessionStatus.AdditionalInfo =
+			FString::Printf(TEXT("Failed to create ARCore session with error status: %d"), (int)SessionCreateStatus);
+
+		if (SessionCreateStatus != EGoogleARCoreAPIStatus::AR_ERROR_FATAL)
+		{
+			CurrentSessionStatus.Status = EARSessionStatus::NotSupported;
+		}
+		else
+		{
+			CurrentSessionStatus.Status = EARSessionStatus::FatalError;
+		}
+
+		NewARCoreSession.Reset();
+	}
+	else
+	{
+		NewARCoreSession->SetARSystem(ARSystem.ToSharedRef());
+	}
+
+	return NewARCoreSession;
+}
+
+
 void FGoogleARCoreDevice::StartSession()
 {
 	UARSessionConfig* RequestedConfig = AccessSessionConfig();
 
-	if (RequestedConfig->GetSessionType() != EARSessionType::World)
+	if (!GetIsTrackingTypeSupported(RequestedConfig->GetSessionType()))
 	{
 		UE_LOG(LogGoogleARCore, Warning, TEXT("Start AR failed: Unsupported AR tracking type %d for GoogleARCore"), static_cast<int>(RequestedConfig->GetSessionType()));
-		CurrentSessionStatus = EARSessionStatus::UnsupportedConfiguration;
+		CurrentSessionStatus.AdditionalInfo = TEXT("Unsupported AR tracking type. Only EARSessionType::World is supported by ARCore.");
+		CurrentSessionStatus.Status = EARSessionStatus::UnsupportedConfiguration;
 		return;
 	}
 
@@ -381,23 +500,42 @@ void FGoogleARCoreDevice::StartSession()
 	if (Status != EGoogleARCoreAPIStatus::AR_SUCCESS)
 	{
 		UE_LOG(LogGoogleARCore, Error, TEXT("ARCore Session start failed with error status %d"), static_cast<int>(Status));
-		CurrentSessionStatus = EARSessionStatus::UnsupportedConfiguration;
+		CurrentSessionStatus.AdditionalInfo = TEXT("ARCore Session start failed due to unsupported ARSessionConfig.");
+		CurrentSessionStatus.Status = EARSessionStatus::UnsupportedConfiguration;
 		return;
 	}
 
 	check(PassthroughCameraTextureId != -1);
 	ARCoreSession->SetCameraTextureId(PassthroughCameraTextureId);
 
-	FGoogleARCoreDelegates::OnCameraConfig.Broadcast(ARCoreSession->GetSupportedCameraConfig());
+	EGoogleARCoreCameraFacing CameraFacing = EGoogleARCoreCameraFacing::Back;
+	const UGoogleARCoreSessionConfig *GoogleConfig = Cast<UGoogleARCoreSessionConfig>(RequestedConfig);
+	if (GoogleConfig != nullptr)
+	{
+		CameraFacing = GoogleConfig->CameraFacing;
+	}
+
+	TArray<FGoogleARCoreCameraConfig> SupportedCameraConfigs = ARCoreSession->GetSupportedCameraConfig();
+	FGoogleARCoreDelegates::OnCameraConfig.Broadcast(SupportedCameraConfigs);
 
 	Status = ARCoreSession->Resume();
 
 	if (Status != EGoogleARCoreAPIStatus::AR_SUCCESS)
 	{
 		UE_LOG(LogGoogleARCore, Error, TEXT("ARCore Session start failed with error status %d"), static_cast<int>(Status));
-		check(Status == EGoogleARCoreAPIStatus::AR_ERROR_FATAL);
-		// If we failed here, the only reason would be fatal error.
-		CurrentSessionStatus = EARSessionStatus::FatalError;
+
+		if (Status == EGoogleARCoreAPIStatus::AR_ERROR_ILLEGAL_STATE)
+		{
+			CurrentSessionStatus.AdditionalInfo = TEXT("Failed to start ARCore Session due to illegal state: All camera images previously acquired must be released before resuming the session with a different camera configuration.");
+			CurrentSessionStatus.Status = EARSessionStatus::Other;
+		}
+		else
+		{
+			// If we failed here, the only reason would be fatal error.
+			CurrentSessionStatus.AdditionalInfo = TEXT("Fatal error occurred when starting ARCore Session. Stopping and restarting ARCore Session may fix the issue.");
+			CurrentSessionStatus.Status = EARSessionStatus::FatalError;
+		}
+
 		return;
 	}
 
@@ -418,7 +556,8 @@ void FGoogleARCoreDevice::StartSession()
 	ARCoreSession->GetARCameraConfig(SessionCameraConfig);
 
 	bIsARCoreSessionRunning = true;
-	CurrentSessionStatus = EARSessionStatus::Running;
+	CurrentSessionStatus.Status = EARSessionStatus::Running;
+	CurrentSessionStatus.AdditionalInfo = TEXT("ARCore Session is running.");
 	UE_LOG(LogGoogleARCore, Log, TEXT("ARCore session started successfully."));
 
 	ARSystem->OnARSessionStarted.Broadcast();
@@ -471,18 +610,25 @@ void FGoogleARCoreDevice::PauseARCoreSession()
 
 	if (Status == EGoogleARCoreAPIStatus::AR_ERROR_FATAL)
 	{
-		CurrentSessionStatus = EARSessionStatus::FatalError;
+		CurrentSessionStatus.Status = EARSessionStatus::FatalError;
+		CurrentSessionStatus.AdditionalInfo = TEXT("Fatal error occurred when starting ARCore Session. Stopping and restarting ARCore Session may fix the issue.");
 	}
-
+	else
+	{
+		CurrentSessionStatus.Status = EARSessionStatus::NotStarted;
+		CurrentSessionStatus.AdditionalInfo = TEXT("ARCore Session is paused.");
+	}
 	bIsARCoreSessionRunning = false;
-	CurrentSessionStatus = EARSessionStatus::NotStarted;
 	UE_LOG(LogGoogleARCore, Log, TEXT("ARCore session paused"));
 }
 
 void FGoogleARCoreDevice::ResetARCoreSession()
 {
 	ARCoreSession.Reset();
-	CurrentSessionStatus = EARSessionStatus::NotStarted;
+	FrontCameraARCoreSession.Reset();
+	BackCameraARCoreSession.Reset();
+	CurrentSessionStatus.Status = EARSessionStatus::NotStarted;
+	CurrentSessionStatus.AdditionalInfo = TEXT("ARCore Session is uninitialized.");
 }
 
 void FGoogleARCoreDevice::AllocatePassthroughCameraTexture_RenderThread()
@@ -504,7 +650,7 @@ FTextureRHIRef FGoogleARCoreDevice::GetPassthroughCameraTexture()
 
 FMatrix FGoogleARCoreDevice::GetPassthroughCameraProjectionMatrix(FIntPoint ViewRectSize) const
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return FMatrix::Identity;
 	}
@@ -513,16 +659,25 @@ FMatrix FGoogleARCoreDevice::GetPassthroughCameraProjectionMatrix(FIntPoint View
 
 void FGoogleARCoreDevice::GetPassthroughCameraImageUVs(const TArray<float>& InUvs, TArray<float>& OutUVs) const
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return;
 	}
 	ARCoreSession->GetLatestFrame()->TransformDisplayUvCoords(InUvs, OutUVs);
 }
 
+int64 FGoogleARCoreDevice::GetPassthroughCameraTimestamp() const
+{
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
+	{
+		return 0;
+	}
+	return ARCoreSession->GetLatestFrame()->GetCameraTimestamp();
+}
+
 EGoogleARCoreTrackingState FGoogleARCoreDevice::GetTrackingState() const
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return EGoogleARCoreTrackingState::StoppedTracking;
 	}
@@ -534,9 +689,19 @@ EGoogleARCoreTrackingState FGoogleARCoreDevice::GetTrackingState() const
 	return ARCoreSession->GetLatestFrame()->GetCameraTrackingState();
 }
 
+EGoogleARCoreTrackingFailureReason FGoogleARCoreDevice::GetTrackingFailureReason() const
+{
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
+	{
+		return EGoogleARCoreTrackingFailureReason::None;
+	}
+
+	return ARCoreSession->GetLatestFrame()->GetCameraTrackingFailureReason();
+}
+
 FTransform FGoogleARCoreDevice::GetLatestPose() const
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return FTransform::Identity;
 	}
@@ -545,7 +710,7 @@ FTransform FGoogleARCoreDevice::GetLatestPose() const
 
 EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetLatestPointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud) const
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return EGoogleARCoreFunctionStatus::NotAvailable;
 	}
@@ -555,7 +720,7 @@ EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetLatestPointCloud(UGoogleARCo
 
 EGoogleARCoreFunctionStatus FGoogleARCoreDevice::AcquireLatestPointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud) const
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return EGoogleARCoreFunctionStatus::NotAvailable;
 	}
@@ -566,7 +731,7 @@ EGoogleARCoreFunctionStatus FGoogleARCoreDevice::AcquireLatestPointCloud(UGoogle
 #if PLATFORM_ANDROID
 EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetLatestCameraMetadata(const ACameraMetadata*& OutCameraMetadata) const
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return EGoogleARCoreFunctionStatus::NotAvailable;
 	}
@@ -575,9 +740,14 @@ EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetLatestCameraMetadata(const A
 }
 #endif
 
+UTexture* FGoogleARCoreDevice::GetCameraTexture()
+{
+	return CameraBlitter.GetLastCameraImageTexture();
+}
+
 EGoogleARCoreFunctionStatus FGoogleARCoreDevice::AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage)
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return EGoogleARCoreFunctionStatus::NotAvailable;
 	}
@@ -585,9 +755,20 @@ EGoogleARCoreFunctionStatus FGoogleARCoreDevice::AcquireCameraImage(UGoogleARCor
 	return ToARCoreFunctionStatus(ARCoreSession->GetLatestFrame()->AcquireCameraImage(OutLatestCameraImage));
 }
 
+void FGoogleARCoreDevice::TransformARCoordinates2D(EGoogleARCoreCoordinates2DType InputCoordinatesType, const TArray<FVector2D>& InputCoordinates, EGoogleARCoreCoordinates2DType OutputCoordinatesType, TArray<FVector2D>& OutputCoordinates) const
+{
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
+	{
+		UE_LOG(LogGoogleARCore, Log, TEXT("Failed to transform ARCoordinate2D due to thers is no valid ARCore session."));
+		return;
+	}
+
+	return ARCoreSession->GetLatestFrame()->TransformARCoordinates2D(InputCoordinatesType, InputCoordinates, OutputCoordinatesType, OutputCoordinates);
+}
+
 FGoogleARCoreLightEstimate FGoogleARCoreDevice::GetLatestLightEstimate() const
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return FGoogleARCoreLightEstimate();
 	}
@@ -597,7 +778,7 @@ FGoogleARCoreLightEstimate FGoogleARCoreDevice::GetLatestLightEstimate() const
 
 void FGoogleARCoreDevice::ARLineTrace(const FVector2D& ScreenPosition, EGoogleARCoreLineTraceChannel TraceChannels, TArray<FARTraceResult>& OutHitResults)
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return;
 	}
@@ -607,7 +788,7 @@ void FGoogleARCoreDevice::ARLineTrace(const FVector2D& ScreenPosition, EGoogleAR
 
 void FGoogleARCoreDevice::ARLineTrace(const FVector& Start, const FVector& End, EGoogleARCoreLineTraceChannel TraceChannels, TArray<FARTraceResult>& OutHitResults)
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return;
 	}
@@ -651,7 +832,7 @@ void FGoogleARCoreDevice::GetAllARPins(TArray<UARPin*>& ARCoreAnchorList)
 
 void FGoogleARCoreDevice::GetUpdatedARPins(TArray<UARPin*>& ARCoreAnchorList)
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return;
 	}
@@ -713,7 +894,7 @@ UARSessionConfig* FGoogleARCoreDevice::AccessSessionConfig() const
 
 EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetCameraImageIntrinsics(UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics)
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return EGoogleARCoreFunctionStatus::NotAvailable;
 	}
@@ -723,7 +904,7 @@ EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetCameraImageIntrinsics(UGoogl
 
 EGoogleARCoreFunctionStatus FGoogleARCoreDevice::GetCameraTextureIntrinsics(UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics)
 {
-	if (!IsARSessionInitialized())
+	if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 	{
 		return EGoogleARCoreFunctionStatus::NotAvailable;
 	}

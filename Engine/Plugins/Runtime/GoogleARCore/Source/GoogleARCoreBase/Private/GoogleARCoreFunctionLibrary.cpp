@@ -129,10 +129,8 @@ public:
 
 	virtual void UpdateOperation(FLatentResponse& Response) override
 	{
-		UE_LOG(LogTemp, Log, TEXT("IntallARCore UpdateOperation..."));
 		EGoogleARCoreInstallStatus InstallStatus = EGoogleARCoreInstallStatus::Installed;
 		EGoogleARCoreAPIStatus RequestStatus = FGoogleARCoreDevice::GetInstance()->RequestInstall(!bInstallRequested, InstallStatus);
-		UE_LOG(LogTemp, Log, TEXT("Requset ARCore Install(User Requested %d) Status: %d, Install Status: %d"), !bInstallRequested, (int)RequestStatus, (int)InstallStatus);
 		if (RequestStatus != EGoogleARCoreAPIStatus::AR_SUCCESS)
 		{
 			OutRequestResult = ToAPKInstallStatus(RequestStatus);
@@ -197,7 +195,7 @@ UGoogleARCoreEventManager* UGoogleARCoreSessionFunctionLibrary::GetARCoreEventMa
 	{
 		return nullptr;
 	}
-	
+
 }
 
 struct FARCoreStartSessionAction : public FPendingLatentAction
@@ -296,10 +294,39 @@ void UGoogleARCoreSessionFunctionLibrary::GetAllTrackablePoints(TArray<UARTracke
 	FGoogleARCoreDevice::GetInstance()->GetAllTrackables<UARTrackedPoint>(OutTrackablePointList);
 }
 
+void UGoogleARCoreSessionFunctionLibrary::GetAllAugmentedImages(TArray<UGoogleARCoreAugmentedImage*>& OutAugmentedImageList)
+{
+	FGoogleARCoreDevice::GetInstance()->GetAllTrackables<UGoogleARCoreAugmentedImage>(OutAugmentedImageList);
+}
+
+void UGoogleARCoreSessionFunctionLibrary::GetAllAugmentedFaces(TArray<UGoogleARCoreAugmentedFace*>& OutAugmentedFaceList)
+{
+	FGoogleARCoreDevice::GetInstance()->GetAllTrackables<UGoogleARCoreAugmentedFace>(OutAugmentedFaceList);
+}
+
 template< class T >
 void UGoogleARCoreSessionFunctionLibrary::GetAllTrackable(TArray<T*>& OutTrackableList)
 {
 	FGoogleARCoreDevice::GetInstance()->GetAllTrackables<T>(OutTrackableList);
+}
+
+UARCandidateImage* UGoogleARCoreSessionFunctionLibrary::AddRuntimeCandidateImageFromRawbytes(UARSessionConfig* SessionConfig, const TArray<uint8>& ImageGrayscalePixels,
+	int ImageWidth, int ImageHeight, FString FriendlyName, float PhysicalWidth, UTexture2D* CandidateTexture /*= nullptr*/)
+{
+	auto ARSystem = FGoogleARCoreDevice::GetInstance()->GetARSystem();
+	if (ARSystem.IsValid())
+	{
+		FGoogleARCoreXRTrackingSystem* GoogleARCoreSystem = static_cast<FGoogleARCoreXRTrackingSystem*>(ARSystem.Get());
+		if (GoogleARCoreSystem->AddRuntimeGrayscaleImage(SessionConfig, ImageGrayscalePixels, ImageWidth, ImageHeight, FriendlyName, PhysicalWidth))
+		{
+			float PhysicalHeight = PhysicalWidth / ImageWidth * ImageHeight;
+			UARCandidateImage* NewCandidateImage = UARCandidateImage::CreateNewARCandidateImage(CandidateTexture, FriendlyName, PhysicalWidth, PhysicalHeight, EARCandidateImageOrientation::Landscape);
+			SessionConfig->AddCandidateImage(NewCandidateImage);
+			return NewCandidateImage;
+		}
+	}
+
+	return nullptr;
 }
 
 template void UGoogleARCoreSessionFunctionLibrary::GetAllTrackable<UARTrackedGeometry>(TArray<UARTrackedGeometry*>& OutTrackableList);
@@ -312,6 +339,11 @@ template void UGoogleARCoreSessionFunctionLibrary::GetAllTrackable<UARTrackedPoi
 EGoogleARCoreTrackingState UGoogleARCoreFrameFunctionLibrary::GetTrackingState()
 {
 	return FGoogleARCoreDevice::GetInstance()->GetTrackingState();
+}
+
+EGoogleARCoreTrackingFailureReason UGoogleARCoreFrameFunctionLibrary::GetTrackingFailureReason()
+{
+	return FGoogleARCoreDevice::GetInstance()->GetTrackingFailureReason();
 }
 
 void UGoogleARCoreFrameFunctionLibrary::GetPose(FTransform& LastePose)
@@ -358,6 +390,16 @@ void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackablePoints(TArray<UARTrac
 	FGoogleARCoreDevice::GetInstance()->GetUpdatedTrackables<UARTrackedPoint>(OutTrackablePointList);
 }
 
+void UGoogleARCoreFrameFunctionLibrary::GetUpdatedAugmentedImages(TArray<UGoogleARCoreAugmentedImage*>& OutImageList)
+{
+	FGoogleARCoreDevice::GetInstance()->GetUpdatedTrackables<UGoogleARCoreAugmentedImage>(OutImageList);
+}
+
+void UGoogleARCoreFrameFunctionLibrary::GetUpdatedAugmentedFaces(TArray<UGoogleARCoreAugmentedFace*>& OutFaceList)
+{
+	FGoogleARCoreDevice::GetInstance()->GetUpdatedTrackables<UGoogleARCoreAugmentedFace>(OutFaceList);
+}
+
 void UGoogleARCoreFrameFunctionLibrary::GetLightEstimation(FGoogleARCoreLightEstimate& LightEstimation)
 {
 	LightEstimation = FGoogleARCoreDevice::GetInstance()->GetLatestLightEstimate();
@@ -390,10 +432,19 @@ template void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackable<UARTrackedG
 template void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackable<UARPlaneGeometry>(TArray<UARPlaneGeometry*>& OutTrackableList);
 template void UGoogleARCoreFrameFunctionLibrary::GetUpdatedTrackable<UARTrackedPoint>(TArray<UARTrackedPoint*>& OutTrackableList);
 
+UTexture* UGoogleARCoreFrameFunctionLibrary::GetCameraTexture()
+{
+	return FGoogleARCoreDevice::GetInstance()->GetCameraTexture();
+}
 
 EGoogleARCoreFunctionStatus UGoogleARCoreFrameFunctionLibrary::AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage)
 {
 	return FGoogleARCoreDevice::GetInstance()->AcquireCameraImage(OutLatestCameraImage);
+}
+
+void UGoogleARCoreFrameFunctionLibrary::TransformARCoordinates2D(EGoogleARCoreCoordinates2DType InputCoordinatesType, const TArray<FVector2D>& InputCoordinates, EGoogleARCoreCoordinates2DType OutputCoordinatesType, TArray<FVector2D>& OutputCoordinates)
+{
+	return FGoogleARCoreDevice::GetInstance()->TransformARCoordinates2D(InputCoordinatesType, InputCoordinates, OutputCoordinatesType, OutputCoordinates);
 }
 
 EGoogleARCoreFunctionStatus UGoogleARCoreFrameFunctionLibrary::GetCameraImageIntrinsics(UGoogleARCoreCameraIntrinsics *&OutCameraIntrinsics)

@@ -139,16 +139,16 @@ void FGoogleARCorePassthroughCameraRenderer::UpdateOverlayUVCoordinate_RenderThr
 
 		// Unreal uses reversed z. 0 is the farthest.
 		Vertices[0].Position = FVector4(0, 1, 0, 1);
-		Vertices[0].UV = FVector2D(InOverlayUVs[0], InOverlayUVs[1]);
+		Vertices[0].UV = FVector2D(InOverlayUVs[0], -InOverlayUVs[1]);
 
 		Vertices[1].Position = FVector4(0, 0, 0, 1);
-		Vertices[1].UV = FVector2D(InOverlayUVs[2], InOverlayUVs[3]);
+		Vertices[1].UV = FVector2D(InOverlayUVs[2], -InOverlayUVs[3]);
 
 		Vertices[2].Position = FVector4(1, 1, 0, 1);
-		Vertices[2].UV = FVector2D(InOverlayUVs[4], InOverlayUVs[5]);
+		Vertices[2].UV = FVector2D(InOverlayUVs[4], -InOverlayUVs[5]);
 
 		Vertices[3].Position = FVector4(1, 0, 0, 1);
-		Vertices[3].UV = FVector2D(InOverlayUVs[6], InOverlayUVs[7]);
+		Vertices[3].UV = FVector2D(InOverlayUVs[6], -InOverlayUVs[7]);
 
 		// Create vertex buffer. Fill buffer with initial data upon creation
 		FRHIResourceCreateInfo CreateInfo(&Vertices);

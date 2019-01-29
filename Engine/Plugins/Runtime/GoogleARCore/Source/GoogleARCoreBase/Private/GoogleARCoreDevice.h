@@ -11,6 +11,7 @@
 #include "GoogleARCoreTypes.h"
 #include "GoogleARCoreAPI.h"
 #include "GoogleARCorePassthroughCameraRenderer.h"
+#include "GoogleARCoreAugmentedImageDatabase.h"
 
 class FGoogleARCoreDevice
 {
@@ -27,7 +28,7 @@ public:
 
 	bool GetIsARCoreSessionRunning();
 
-	EARSessionStatus GetSessionStatus();
+	FARSessionStatus GetSessionStatus();
 
 	// Get Unreal Units per meter, based off of the current map's VR World to Meters setting.
 	float GetWorldToMetersScale();
@@ -38,6 +39,18 @@ public:
 	bool SetARCameraConfig(FGoogleARCoreCameraConfig CameraConfig);
 
 	bool GetARCameraConfig(FGoogleARCoreCameraConfig& OutCurrentCameraConfig);
+
+	bool GetIsFrontCameraSession();
+
+	bool GetShouldInvertCulling();
+
+	// Add image to TargetImageDatabase and return the image index.
+	// Return -1 if the image cannot be processed.
+	int AddRuntimeAugmentedImage(UGoogleARCoreAugmentedImageDatabase* TargetImageDatabase, const TArray<uint8>& ImageGrayscalePixels,
+		int ImageWidth, int ImageHeight, FString ImageName, float ImageWidthInMeter);
+
+	bool AddRuntimeCandidateImage(UARSessionConfig* SessionConfig, const TArray<uint8>& ImageGrayscalePixels, int ImageWidth, int ImageHeight,
+		FString FriendlyName, float PhysicalWidth);
 
 	bool GetStartSessionRequestFinished();
 
@@ -51,9 +64,11 @@ public:
 	// Passthrough Camera
 	FMatrix GetPassthroughCameraProjectionMatrix(FIntPoint ViewRectSize) const;
 	void GetPassthroughCameraImageUVs(const TArray<float>& InUvs, TArray<float>& OutUVs) const;
+	int64 GetPassthroughCameraTimestamp() const;
 
 	// Frame
 	EGoogleARCoreTrackingState GetTrackingState() const;
+	EGoogleARCoreTrackingFailureReason GetTrackingFailureReason() const;
 	FTransform GetLatestPose() const;
 	FGoogleARCoreLightEstimate GetLatestLightEstimate() const;
 	EGoogleARCoreFunctionStatus GetLatestPointCloud(UGoogleARCorePointCloud*& OutLatestPointCloud) const;
@@ -61,7 +76,11 @@ public:
 #if PLATFORM_ANDROID
 	EGoogleARCoreFunctionStatus GetLatestCameraMetadata(const ACameraMetadata*& OutCameraMetadata) const;
 #endif
+	UTexture* GetCameraTexture();
 	EGoogleARCoreFunctionStatus AcquireCameraImage(UGoogleARCoreCameraImage *&OutLatestCameraImage);
+
+	void TransformARCoordinates2D(EGoogleARCoreCoordinates2DType InputCoordinatesType, const TArray<FVector2D>& InputCoordinates,
+		EGoogleARCoreCoordinates2DType OutputCoordinatesType, TArray<FVector2D>& OutputCoordinates) const;
 
 	// Hit test
 	void ARLineTrace(const FVector2D& ScreenPosition, EGoogleARCoreLineTraceChannel TraceChannels, TArray<FARTraceResult>& OutHitResults);
@@ -77,7 +96,7 @@ public:
 	template< class T >
 	void GetUpdatedTrackables(TArray<T*>& OutARCoreTrackableList)
 	{
-		if (!IsARSessionInitialized())
+		if (!ARCoreSession.IsValid() || ARCoreSession->GetLatestFrame() == nullptr)
 		{
 			return;
 		}
@@ -121,11 +140,6 @@ public:
 	void* GetGameThreadARFrameRawPointer();
 
 private:
-	bool IsARSessionInitialized() const
-	{
-		return ARCoreSession.IsValid() && ARCoreSession->GetLatestFrame() != nullptr;
-	}
-
 	// Android lifecycle events.
 	void OnApplicationCreated();
 	void OnApplicationDestroyed();
@@ -143,6 +157,7 @@ private:
 
 	void CheckAndRequrestPermission(const UARSessionConfig& ConfigurationData);
 
+	TSharedPtr<FGoogleARCoreSession> CreateSession(bool bUseFrontCamera);
 	void StartSession();
 
 	friend class FGoogleARCoreAndroidHelper;
@@ -152,6 +167,9 @@ private:
 
 private:
 	TSharedPtr<FGoogleARCoreSession> ARCoreSession;
+	TSharedPtr<FGoogleARCoreSession> FrontCameraARCoreSession;
+	TSharedPtr<FGoogleARCoreSession> BackCameraARCoreSession;
+
 	FTextureRHIRef PassthroughCameraTexture;
 	uint32 PassthroughCameraTextureId;
 	bool bIsARCoreSessionRunning;
@@ -168,7 +186,7 @@ private:
 	class UARCoreAndroidPermissionHandler* PermissionHandler;
 	FThreadSafeBool bDisplayOrientationChanged;
 
-	EARSessionStatus CurrentSessionStatus;
+	FARSessionStatus CurrentSessionStatus;
 
 	FGoogleARCoreCameraConfig SessionCameraConfig;
 	FGoogleARCoreDeviceCameraBlitter CameraBlitter;
